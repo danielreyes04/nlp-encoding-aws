@@ -4,5 +4,5 @@ spacy==3.7.5
 scikit-learn==1.5.2
 pydantic==2.9.2
 
-# El modelo de spaCy se instala aparte (ver README), con:
+# El modelo de spaCy se instala aparte (ver README), con
 #   python -m spacy download es_core_news_sm
