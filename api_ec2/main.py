@@ -1,17 +1,23 @@
 """
-api_ec2 #1 - Corre en una instancia EC2 (o dentro de Cloud9, que por debajo
+API #1 - Corre en una instancia EC2 (o dentro de Cloud9, que por debajo
 es una EC2) con uvicorn como servidor persistente.
 
 Ejecutar localmente / en la instancia:
     uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+Documentacion interactiva automatica en:
+    http://<IP-publica-de-tu-instancia>:8000/docs
 """
 
 import sys
 from pathlib import Path
 
+# Permite importar el paquete "app" (nlp_pipeline, schemas) que vive
+# un nivel arriba, compartido con api_lambda.
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.nlp_pipeline import (
     clean_and_transform,
@@ -26,6 +32,15 @@ app = FastAPI(
     title="NLP Encoding API (EC2)",
     description="Preprocesamiento y codificacion de texto con spaCy",
     version="1.0.0",
+)
+
+# Permite que client.html (abierto desde file:// o cualquier origen)
+# pueda llamar a esta API sin que el navegador lo bloquee por CORS.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
