@@ -31,7 +31,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 
 @lru_cache(maxsize=1)
 def get_nlp():
-    return spacy.load("es_core_news_sm")
+    return spacy.load("es_core_news_md")
     # es demorado de cargar el modelo, por eso se instancia una vez y se guarda en memoria
     # ese modelo es el encargado de todo el nlp
 
