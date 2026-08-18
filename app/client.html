@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nlp_pipeline :: cliente</title>
+<style>
+  :root{
+    --bg:#0d1117;
+    --panel:#11161d;
+    --line:#232a34;
+    --ink:#d6dde5;
+    --dim:#6b7685;
+    --accent:#7fdba0;
+    --accent-dim:#1f3d2b;
+    --warn:#e0975a;
+    --mono:'IBM Plex Mono','SF Mono',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:14px;
+    line-height:1.5;
+  }
+  .top{
+    border-bottom:1px solid var(--line);
+    padding:18px 28px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  .top h1{
+    margin:0;
+    font-size:15px;
+    font-weight:600;
+    letter-spacing:.02em;
+    color:var(--ink);
+  }
+  .top h1 span{color:var(--accent);}
+  .top .sub{color:var(--dim); font-size:12px;}
+  .base-row{
+    display:flex; gap:8px; align-items:center;
+    padding:14px 28px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel);
+    flex-wrap:wrap;
+  }
+  .base-row label{color:var(--dim); font-size:12px;}
+  .base-row input{
+    flex:1; min-width:220px;
+    background:var(--bg);
+    border:1px solid var(--line);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:13px;
+    padding:8px 10px;
+    border-radius:3px;
+  }
+  .base-row input:focus{outline:1px solid var(--accent); border-color:var(--accent);}
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--dim); flex-shrink:0;}
+  .dot.ok{background:var(--accent);}
+  .dot.bad{background:#e2585e;}
+  .status-txt{color:var(--dim); font-size:11px; min-width:90px;}
+
+  nav{
+    display:flex;
+    border-bottom:1px solid var(--line);
+    padding:0 28px;
+    overflow-x:auto;
+  }
+  nav button{
+    background:none; border:none;
+    color:var(--dim);
+    font-family:var(--mono);
+    font-size:13px;
+    padding:12px 16px;
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+    white-space:nowrap;
+  }
+  nav button:hover{color:var(--ink);}
+  nav button.active{color:var(--accent); border-bottom-color:var(--accent);}
+
+  main{padding:24px 28px 60px; max-width:1000px;}
+  .route{display:none;}
+  .route.active{display:block;}
+  .route .desc{color:var(--dim); font-size:12px; margin-bottom:14px;}
+  .route .desc code{color:var(--warn);}
+
+  textarea{
+    width:100%;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:13px;
+    padding:12px;
+    border-radius:4px;
+    resize:vertical;
+    min-height:90px;
+  }
+  textarea:focus{outline:none; border-color:var(--accent);}
+
+  .method-row{display:flex; gap:8px; margin:10px 0 14px;}
+  .method-row select{
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:13px;
+    padding:8px 10px;
+    border-radius:3px;
+  }
+
+  button.send{
+    background:var(--accent-dim);
+    color:var(--accent);
+    border:1px solid var(--accent);
+    font-family:var(--mono);
+    font-size:13px;
+    padding:9px 18px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  button.send:hover{background:var(--accent); color:#04170c;}
+  button.send:disabled{opacity:.4; cursor:default;}
+
+  .corpus-list{display:flex; flex-direction:column; gap:6px; margin-bottom:10px;}
+  .corpus-list input{
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:13px;
+    padding:8px 10px;
+    border-radius:3px;
+  }
+  .corpus-actions{display:flex; gap:8px; margin-bottom:14px;}
+  .corpus-actions button{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--dim);
+    font-family:var(--mono);
+    font-size:12px;
+    padding:5px 10px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  .corpus-actions button:hover{color:var(--ink); border-color:var(--dim);}
+
+  .out-head{
+    display:flex; justify-content:space-between; align-items:center;
+    color:var(--dim); font-size:11px; margin:22px 0 8px;
+    text-transform:uppercase; letter-spacing:.05em;
+  }
+  pre.out{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:16px;
+    overflow-x:auto;
+    color:var(--ink);
+    font-size:12.5px;
+    min-height:60px;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  pre.out .err{color:#e2585e;}
+  pre.out.empty{color:var(--dim);}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>nlp_pipeline <span>:: cliente</span></h1>
+  <div class="sub">FastAPI + spaCy — /processed /dependency /ner /full /encoding</div>
+</div>
+
+<div class="base-row">
+  <span class="dot" id="statusDot"></span>
+  <span class="status-txt" id="statusTxt">sin probar</span>
+  <label for="baseUrl">URL base</label>
+  <input id="baseUrl" type="text" placeholder="http://TU-IP-PUBLICA:8000" value="http://localhost:8000">
+</div>
+
+<nav id="tabs">
+  <button data-route="processed" class="active">/processed</button>
+  <button data-route="dependency">/dependency</button>
+  <button data-route="ner">/ner</button>
+  <button data-route="full">/full</button>
+  <button data-route="encoding">/encoding</button>
+</nav>
+
+<main>
+
+  <section class="route active" id="route-processed">
+    <div class="desc">Limpieza + transformación + etiquetado. Envía <code>{"text": "..."}</code>, devuelve tokens con lema y POS.</div>
+    <textarea data-text placeholder="Mi gato, su gato y nuestro gato comen pescado">Mi gato, su gato y nuestro gato comen pescado</textarea>
+    <div class="method-row"><button class="send" data-endpoint="processed">enviar →</button></div>
+    <div class="out-head">respuesta<span></span></div>
+    <pre class="out empty" data-out="processed">esperando…</pre>
+  </section>
+
+  <section class="route" id="route-dependency">
+    <div class="desc">Análisis de dependencias sintácticas: quién es sujeto, objeto, y de qué depende cada palabra.</div>
+    <textarea data-text placeholder="El caballo corre muy rapido">El caballo corre muy rapido</textarea>
+    <div class="method-row"><button class="send" data-endpoint="dependency">enviar →</button></div>
+    <div class="out-head">respuesta<span></span></div>
+    <pre class="out empty" data-out="dependency">esperando…</pre>
+  </section>
+
+  <section class="route" id="route-ner">
+    <div class="desc">Entidades nombradas: personas, lugares, organizaciones.</div>
+    <textarea data-text placeholder="Juan comio en Bogota">Juan comio en Bogota</textarea>
+    <div class="method-row"><button class="send" data-endpoint="ner">enviar →</button></div>
+    <div class="out-head">respuesta<span></span></div>
+    <pre class="out empty" data-out="ner">esperando…</pre>
+  </section>
+
+  <section class="route" id="route-full">
+    <div class="desc">Corre processed + dependency + ner sobre el mismo texto, en una sola respuesta.</div>
+    <textarea data-text placeholder="Juan comio pescado en Bogota">Juan comio pescado en Bogota</textarea>
+    <div class="method-row"><button class="send" data-endpoint="full">enviar →</button></div>
+    <div class="out-head">respuesta<span></span></div>
+    <pre class="out empty" data-out="full">esperando…</pre>
+  </section>
+
+  <section class="route" id="route-encoding">
+    <div class="desc">Codifica un corpus (varios documentos). Elige el método y edita las filas del corpus.</div>
+    <div class="method-row">
+      <select id="encodingMethod">
+        <option value="tfidf" selected>tfidf</option>
+        <option value="bow">bow</option>
+        <option value="onehot">onehot</option>
+      </select>
+    </div>
+    <div class="corpus-list" id="corpusList">
+      <input type="text" value="Mi gato, su gato y nuestro gato comen pescado">
+      <input type="text" value="Juan comio en Bogota">
+      <input type="text" value="El caballo corre muy rapido">
+    </div>
+    <div class="corpus-actions">
+      <button id="addDoc">+ agregar documento</button>
+      <button id="removeDoc">− quitar último</button>
+    </div>
+    <div class="method-row"><button class="send" data-endpoint="encoding">enviar →</button></div>
+    <div class="out-head">respuesta<span></span></div>
+    <pre class="out empty" data-out="encoding">esperando…</pre>
+  </section>
+
+</main>
+
+<script>
+  const tabs = document.querySelectorAll('#tabs button');
+  const routes = document.querySelectorAll('.route');
+  tabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabs.forEach(b => b.classList.remove('active'));
+      routes.forEach(r => r.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('route-' + btn.dataset.route).classList.add('active');
+    });
+  });
+
+  const baseUrlInput = document.getElementById('baseUrl');
+  const statusDot = document.getElementById('statusDot');
+  const statusTxt = document.getElementById('statusTxt');
+
+  function getBase(){
+    return baseUrlInput.value.trim().replace(/\/$/, '');
+  }
+
+  async function pingHealth(){
+    try{
+      const res = await fetch(getBase() + '/', { method: 'GET' });
+      if(res.ok){
+        statusDot.className = 'dot ok';
+        statusTxt.textContent = 'conectado';
+      } else {
+        statusDot.className = 'dot bad';
+        statusTxt.textContent = 'HTTP ' + res.status;
+      }
+    } catch(e){
+      statusDot.className = 'dot bad';
+      statusTxt.textContent = 'sin conexión';
+    }
+  }
+  baseUrlInput.addEventListener('change', pingHealth);
+  pingHealth();
+
+  // corpus dinámico para /encoding
+  document.getElementById('addDoc').addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'nuevo documento…';
+    document.getElementById('corpusList').appendChild(input);
+  });
+  document.getElementById('removeDoc').addEventListener('click', () => {
+    const list = document.getElementById('corpusList');
+    if(list.children.length > 1) list.removeChild(list.lastElementChild);
+  });
+
+  async function send(endpoint){
+    const btn = document.querySelector(`.send[data-endpoint="${endpoint}"]`);
+    const out = document.querySelector(`[data-out="${endpoint}"]`);
+    btn.disabled = true;
+    out.classList.remove('empty');
+    out.textContent = 'esperando respuesta…';
+
+    let body;
+    if(endpoint === 'encoding'){
+      const corpus = Array.from(document.querySelectorAll('#corpusList input'))
+                           .map(i => i.value.trim()).filter(Boolean);
+      const method = document.getElementById('encodingMethod').value;
+      body = JSON.stringify({ corpus, method });
+    } else {
+      const text = document.querySelector(`#route-${endpoint} textarea[data-text]`).value.trim();
+      body = JSON.stringify({ text });
+    }
+
+    try{
+      const res = await fetch(getBase() + '/' + endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+      if(!res.ok) out.innerHTML = `<span class="err">HTTP ${res.status}</span>\n` + JSON.stringify(data, null, 2);
+    } catch(e){
+      out.innerHTML = `<span class="err">Error de red: ${e.message}</span>\n\n¿Corriste uvicorn? ¿El puerto está abierto en el Security Group?`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  document.querySelectorAll('.send').forEach(btn => {
+    btn.addEventListener('click', () => send(btn.dataset.endpoint));
+  });
+</script>
+
+</body>
+</html>

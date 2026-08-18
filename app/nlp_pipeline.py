@@ -18,6 +18,7 @@ si quieres mas precision, a costa de mas peso).
 from __future__ import annotations
 
 import spacy
+#functools es para que una vez se ejecute la funcion se guarde el resultado y no sea necesario volverla a ejecutar 
 from functools import lru_cache
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 
@@ -31,6 +32,8 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 @lru_cache(maxsize=1)
 def get_nlp():
     return spacy.load("es_core_news_sm")
+    # es demorado de cargar el modelo, por eso se instancia una vez y se guarda en memoria
+    # ese modelo es el encargado de todo el nlp
 
 
 # ---------------------------------------------------------------------
@@ -48,19 +51,28 @@ def clean_and_transform(text: str) -> list[dict]:
     en el mismo orden en que aparecen en el texto.
     """
     nlp = get_nlp()
+    
+    # nlp es un objeto que viene de la libreria de Spacy
+    # se encarga de recibir el texto en plano para realizar un analisisi de nlp
     doc = nlp(text)
 
     tokens = []
     for tok in doc:
         if tok.is_stop or tok.is_punct or tok.is_space:
+            # Elimina el ruido al momento de tokenizar
+            # elimina los stopwords (el, lo, las, etc..) conectores
+            # elimina signis de puntuacion
+            # elimina espacios en blanco, saltos de linea, etc..
             continue
+    
         tokens.append(
             {
                 "texto_original": tok.text,
-                "lema": tok.lemma_.lower(),
+                "lema": tok.lemma_.lower(), # corriendo --> correr
                 "pos": tok.pos_,       # NOUN, VERB, ADJ, ADV, PROPN...
-                "pos_detalle": tok.tag_,
+                "pos_detalle": tok.tag_, # Guarda la etiqueta gramatical detallada dependiente del idioma (codigo tecnico)
             }
+            #hace el append del dic a la lista tokens
         )
     return tokens
 
@@ -68,7 +80,11 @@ def clean_and_transform(text: str) -> list[dict]:
 def lemmas_only(text: str) -> list[str]:
     """Devuelve solo la lista de lemas limpios (lo que usamos para
     construir el vocabulario en la etapa de codificacion)."""
+    
+    # Recorre el diccionario de la funcion clean_and_transform pero solo de la clave [lema] y crea una una lista extrayendo esos valores
+    # t trae un diccionario
     return [t["lema"] for t in clean_and_transform(text)]
+    
 
 
 # ---------------------------------------------------------------------
