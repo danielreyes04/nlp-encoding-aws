@@ -22,6 +22,7 @@ from app.nlp_pipeline import (
     named_entities,
     full_pipeline,
     encode_corpus,
+    corpus_pipeline,
 )
 from app.schemas import TextRequest, EncodingRequest
 
@@ -61,6 +62,14 @@ def full(req: TextRequest):
 def encoding(req: EncodingRequest):
     try:
         return encode_corpus(req.corpus, req.method)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/pipeline")
+def pipeline(req: EncodingRequest):
+    try:
+        return corpus_pipeline(req.corpus, req.method)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

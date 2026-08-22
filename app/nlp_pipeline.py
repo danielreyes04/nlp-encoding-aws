@@ -217,3 +217,60 @@ def encode_corpus(corpus: list[str], method: str = "tfidf") -> dict:
             for i in range(len(corpus))
         ],
     }
+
+
+# ---------------------------------------------------------------------
+# 7. Pipeline completo paso a paso sobre un corpus (endpoint /pipeline)
+# ---------------------------------------------------------------------
+def corpus_pipeline(corpus: list[str], method: str = "tfidf") -> dict:
+    """
+    Ejecuta todo el flujo NLP paso a paso sobre un corpus de documentos:
+      Paso 1: Limpieza, transformacion y etiquetado POS (processed).
+      Paso 2: Analisis de dependencias sintacticas con arboles visuales spaCy displaCy (dependency).
+      Paso 3: Reconocimiento de entidades nombradas (ner).
+      Paso 4: Resumen integrado full por cada documento (full).
+      Paso 5: Codificacion global del corpus: construccion de vocabulario
+              y vectorizacion segun el metodo (onehot, bow, tfidf) (encoding).
+    """
+    method = method.lower()
+    if method not in {"onehot", "bow", "tfidf"}:
+        raise ValueError("method debe ser 'onehot', 'bow' o 'tfidf'")
+
+    documentos_paso_a_paso = []
+    for i, doc_text in enumerate(corpus):
+        tokens_proc = clean_and_transform(doc_text)
+        lemas = lemmas_only(doc_text)
+        dep_data = dependency_parse(doc_text)
+        ner_data = named_entities(doc_text)
+
+        documentos_paso_a_paso.append({
+            "id": i + 1,
+            "documento_original": doc_text,
+            "paso_1_processed": {
+                "tokens_limpios": tokens_proc,
+                "lemas": lemas,
+            },
+            "paso_2_dependency": dep_data,
+            "paso_3_ner": {
+                "entidades": ner_data,
+            },
+            "paso_4_full": {
+                "texto_original": doc_text,
+                "tokens_procesados": tokens_proc,
+                "dependencias": dep_data,
+                "entidades": ner_data,
+            },
+        })
+
+    encoding_data = encode_corpus(corpus, method)
+
+    return {
+        "resumen": {
+            "total_documentos": len(corpus),
+            "metodo_codificacion": method,
+            "tamano_vocabulario": len(encoding_data["vocabulario"]),
+        },
+        "paso_a_paso_documentos": documentos_paso_a_paso,
+        "paso_5_encoding_corpus": encoding_data,
+    }
+

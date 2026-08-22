@@ -25,6 +25,7 @@ from app.nlp_pipeline import (
     named_entities,
     full_pipeline,
     encode_corpus,
+    corpus_pipeline,
 )
 from app.schemas import TextRequest, EncodingRequest
 
@@ -78,5 +79,14 @@ def encoding(req: EncodingRequest):
     """Codificacion del corpus: one-hot | bow | tfidf."""
     try:
         return encode_corpus(req.corpus, req.method)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/pipeline")
+def pipeline(req: EncodingRequest):
+    """Pipeline integral paso a paso (processed + dependency + ner + full + encoding) sobre un corpus."""
+    try:
+        return corpus_pipeline(req.corpus, req.method)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
