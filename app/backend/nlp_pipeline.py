@@ -19,9 +19,13 @@ from __future__ import annotations
 
 import spacy
 from spacy import displacy
-#functools es para que una vez se ejecute la funcion se guarde el resultado y no sea necesario volverla a ejecutar 
+import logging
 from functools import lru_cache
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+
+from app.backend.config import SPACY_MODEL, SPACY_FALLBACK_MODEL
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------
 # 1. Carga del modelo (una sola vez, cacheado)
@@ -31,10 +35,18 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 # modelo ya esta en memoria y la siguiente invocacion es rapida.
 
 @lru_cache(maxsize=1)
-def get_nlp():
-    return spacy.load("es_core_news_md")
-    # es demorado de cargar el modelo, por eso se instancia una vez y se guarda en memoria
-    # ese modelo es el encargado de todo el nlp
+def get_nlp(model_name: str | None = None) -> spacy.language.Language:
+    """Carga el modelo de spaCy con cache LRU y fallback automático."""
+    selected = model_name or SPACY_MODEL
+    try:
+        return spacy.load(selected)
+    except OSError:
+        logger.warning(
+            "Modelo '%s' no disponible localmente. Cargando fallback '%s'.",
+            selected,
+            SPACY_FALLBACK_MODEL,
+        )
+        return spacy.load(SPACY_FALLBACK_MODEL)
 
 
 # ---------------------------------------------------------------------
@@ -273,4 +285,3 @@ def corpus_pipeline(corpus: list[str], method: str = "tfidf") -> dict:
         "paso_a_paso_documentos": documentos_paso_a_paso,
         "paso_5_encoding_corpus": encoding_data,
     }
-

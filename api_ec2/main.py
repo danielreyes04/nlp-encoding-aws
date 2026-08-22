@@ -18,8 +18,11 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from app.nlp_pipeline import (
+from app.backend.config import API_TITLE, API_DESCRIPTION, API_VERSION, CORS_ORIGINS
+from app.backend.nlp_pipeline import (
     clean_and_transform,
     dependency_parse,
     named_entities,
@@ -27,27 +30,42 @@ from app.nlp_pipeline import (
     encode_corpus,
     corpus_pipeline,
 )
-from app.schemas import TextRequest, EncodingRequest
+from app.backend.schemas import TextRequest, EncodingRequest
 
 app = FastAPI(
-    title="NLP Encoding API (EC2)",
-    description="Preprocesamiento y codificacion de texto con spaCy",
-    version="1.0.0",
+    title=f"{API_TITLE} (EC2)",
+    description=API_DESCRIPTION,
+    version=API_VERSION,
 )
 
-# Permite que client.html (abierto desde file:// o cualquier origen)
-# pueda llamar a esta API sin que el navegador lo bloquee por CORS.
+# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Montar archivos estáticos para la interfaz de usuario
+static_dir = Path(__file__).resolve().parent.parent / "app" / "frontend"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 @app.get("/")
 def health():
     return {"status": "ok", "servicio": "EC2/Cloud9"}
+
+
+@app.get("/ui", include_in_schema=False)
+@app.get("/client", include_in_schema=False)
+def serve_client():
+    """Sirve la interfaz web del cliente."""
+    client_path = static_dir / "client.html"
+    if client_path.exists():
+        return FileResponse(str(client_path))
+    raise HTTPException(status_code=404, detail="Cliente web no encontrado")
 
 
 @app.post("/processed")

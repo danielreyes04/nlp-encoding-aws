@@ -16,7 +16,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from fastapi import FastAPI, HTTPException
 from mangum import Mangum
 
-from app.nlp_pipeline import (
+from app.backend.config import API_TITLE, API_DESCRIPTION, API_VERSION
+from app.backend.nlp_pipeline import (
     clean_and_transform,
     dependency_parse,
     named_entities,
@@ -24,12 +25,12 @@ from app.nlp_pipeline import (
     encode_corpus,
     corpus_pipeline,
 )
-from app.schemas import TextRequest, EncodingRequest
+from app.backend.schemas import TextRequest, EncodingRequest
 
 app = FastAPI(
-    title="NLP Encoding API (Lambda)",
-    description="Preprocesamiento y codificacion de texto con spaCy",
-    version="1.0.0",
+    title=f"{API_TITLE} (Lambda)",
+    description=API_DESCRIPTION,
+    version=API_VERSION,
 )
 
 
