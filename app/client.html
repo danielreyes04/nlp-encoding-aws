@@ -172,6 +172,28 @@
   }
   pre.out .err{color:#e2585e;}
   pre.out.empty{color:var(--dim);}
+
+  .tree-preview{
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .tree-card{
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 12px 16px;
+    overflow-x: auto;
+    color: #111111;
+  }
+  .tree-card-title{
+    font-size: 11px;
+    color: #555555;
+    margin-bottom: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
 </style>
 </head>
 <body>
@@ -207,10 +229,11 @@
   </section>
 
   <section class="route" id="route-dependency">
-    <div class="desc">Análisis de dependencias sintácticas: quién es sujeto, objeto, y de qué depende cada palabra.</div>
+    <div class="desc">Análisis de dependencias sintácticas: quién es sujeto, objeto, y de qué depende cada palabra. Incluye árbol visual generado con displaCy.</div>
     <textarea data-text placeholder="El caballo corre muy rapido">El caballo corre muy rapido</textarea>
     <div class="method-row"><button class="send" data-endpoint="dependency">enviar →</button></div>
-    <div class="out-head">respuesta<span></span></div>
+    <div class="tree-preview" id="trees-dependency"></div>
+    <div class="out-head">respuesta json<span></span></div>
     <pre class="out empty" data-out="dependency">esperando…</pre>
   </section>
 
@@ -226,7 +249,8 @@
     <div class="desc">Corre processed + dependency + ner sobre el mismo texto, en una sola respuesta.</div>
     <textarea data-text placeholder="Juan comio pescado en Bogota">Juan comio pescado en Bogota</textarea>
     <div class="method-row"><button class="send" data-endpoint="full">enviar →</button></div>
-    <div class="out-head">respuesta<span></span></div>
+    <div class="tree-preview" id="trees-full"></div>
+    <div class="out-head">respuesta json<span></span></div>
     <pre class="out empty" data-out="full">esperando…</pre>
   </section>
 
@@ -308,6 +332,9 @@
   async function send(endpoint){
     const btn = document.querySelector(`.send[data-endpoint="${endpoint}"]`);
     const out = document.querySelector(`[data-out="${endpoint}"]`);
+    const treeBox = document.getElementById(`trees-${endpoint}`);
+    if(treeBox) treeBox.innerHTML = '';
+
     btn.disabled = true;
     out.classList.remove('empty');
     out.textContent = 'esperando respuesta…';
@@ -331,6 +358,25 @@
       });
       const data = await res.json();
       out.textContent = JSON.stringify(data, null, 2);
+
+      if(treeBox){
+        const arboles = data.arboles || (data.dependencias && data.dependencias.arboles);
+        if(Array.isArray(arboles) && arboles.length > 0){
+          arboles.forEach((item, i) => {
+            const card = document.createElement('div');
+            card.className = 'tree-card';
+            const title = document.createElement('div');
+            title.className = 'tree-card-title';
+            title.textContent = `Árbol de dependencias — Oración ${i + 1}: "${item.oracion}"`;
+            const svgDiv = document.createElement('div');
+            svgDiv.innerHTML = item.svg;
+            card.appendChild(title);
+            card.appendChild(svgDiv);
+            treeBox.appendChild(card);
+          });
+        }
+      }
+
       if(!res.ok) out.innerHTML = `<span class="err">HTTP ${res.status}</span>\n` + JSON.stringify(data, null, 2);
     } catch(e){
       out.innerHTML = `<span class="err">Error de red: ${e.message}</span>\n\n¿Corriste uvicorn? ¿El puerto está abierto en el Security Group?`;

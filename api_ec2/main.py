@@ -58,7 +58,7 @@ def processed(req: TextRequest):
 @app.post("/dependency")
 def dependency(req: TextRequest):
     """Analisis de dependencias sintacticas."""
-    return {"dependencias": dependency_parse(req.text)}
+    return dependency_parse(req.text)
 
 
 @app.post("/ner")

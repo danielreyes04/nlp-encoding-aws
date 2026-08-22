@@ -18,6 +18,7 @@ si quieres mas precision, a costa de mas peso).
 from __future__ import annotations
 
 import spacy
+from spacy import displacy
 #functools es para que una vez se ejecute la funcion se guarde el resultado y no sea necesario volverla a ejecutar 
 from functools import lru_cache
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
@@ -90,17 +91,17 @@ def lemmas_only(text: str) -> list[str]:
 # ---------------------------------------------------------------------
 # 3. Dependencias sintacticas (endpoint /dependency)
 # ---------------------------------------------------------------------
-def dependency_parse(text: str) -> list[dict]:
+def dependency_parse(text: str) -> dict:
     """
     Analisis de dependencias: para cada token dice de que palabra
     depende sintacticamente y con que relacion (sujeto, objeto, etc).
-    Esto es informacion "gramatica/sintaxis" -> una de las cosas que
-    tus apuntes dicen que una buena representacion deberia capturar.
+    Ademas, utiliza el modulo displacy de spaCy para generar el arbol visual
+    de dependencias (en formato SVG) para cada oracion.
     """
     nlp = get_nlp()
     doc = nlp(text)
 
-    return [
+    tokens = [
         {
             "texto": tok.text,
             "lema": tok.lemma_.lower(),
@@ -111,6 +112,20 @@ def dependency_parse(text: str) -> list[dict]:
         for tok in doc
         if not tok.is_space
     ]
+
+    arboles = [
+        {
+            "oracion": sent.text.strip(),
+            "svg": displacy.render(sent, style="dep", jupyter=False),
+        }
+        for sent in doc.sents
+        if sent.text.strip()
+    ]
+
+    return {
+        "dependencias": tokens,
+        "arboles": arboles,
+    }
 
 
 # ---------------------------------------------------------------------
