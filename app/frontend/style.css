@@ -426,3 +426,56 @@ pre.out.empty {
   margin-bottom: 10px;
   font-weight: 600;
 }
+
+/* ── Botón y estado del procesamiento ──────────────────────────────── */
+.corpus-send-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.process-status {
+  font-size: 12px;
+  color: var(--dim);
+}
+.process-status.running { color: var(--warn); }
+.process-status.ok      { color: var(--accent); }
+.process-status.error   { color: var(--err); }
+
+/* ── Mini-tabs por documento ────────────────────────────────────────── */
+.doc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.doc-tab {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.doc-tab:hover {
+  color: var(--ink);
+  border-color: var(--dim);
+}
+
+.doc-tab.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* ── Hint cuando no hay datos aún ──────────────────────────────────── */
+.empty-hint {
+  color: var(--dim);
+  font-size: 13px;
+  padding: 16px 0;
+}

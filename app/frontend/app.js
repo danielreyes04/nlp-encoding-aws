@@ -1,8 +1,25 @@
 /**
- * app.js — Cliente interactivo NLP Pipeline API
- * Corpus compartido: todas las pestañas leen de #sharedCorpus.
+ * app.js — NLP Pipeline cliente
+ *
+ * Flujo:
+ *  1. Usuario edita el corpus compartido.
+ *  2. Pulsa "Procesar corpus" → se llaman todos los endpoints en paralelo.
+ *  3. Los resultados se guardan en `state`.
+ *  4. Las pestañas renderizan desde `state` con mini-tabs por documento.
+ *     Cambiar de pestaña o de documento no hace ninguna petición extra.
  */
 
+// ─── Estado global ────────────────────────────────────────────────────────────
+const state = {
+  corpus:    [],   // strings originales
+  clean:     null, // { cleaned_text: [...] }
+  pos:       null, // { results: [[...], ...] }
+  ner:       null, // { results: [[...], ...] }
+  dep:       [],   // array de strings HTML, uno por doc
+  vectorize: null, // { vocabulary, bag_of_words, one_hot, tf_idf }
+};
+
+// ─── Helpers DOM ──────────────────────────────────────────────────────────────
 const baseUrlInput = document.getElementById('baseUrl');
 const statusDot    = document.getElementById('statusDot');
 const statusTxt    = document.getElementById('statusTxt');
@@ -11,17 +28,16 @@ function getBaseUrl() {
   return baseUrlInput.value.trim().replace(/\/$/, '');
 }
 
-/** Lee los documentos del corpus compartido (filtra vacíos). */
 function getCorpus() {
   return Array.from(document.querySelectorAll('#sharedCorpus input'))
     .map(i => i.value.trim())
     .filter(Boolean);
 }
 
-// ─── Health check ─────────────────────────────────────────────────────────────
+// ─── Health ───────────────────────────────────────────────────────────────────
 async function pingHealth() {
   try {
-    const res = await fetch(`${getBaseUrl()}/`, { method: 'GET' });
+    const res = await fetch(`${getBaseUrl()}/`);
     statusDot.className = res.ok ? 'dot ok' : 'dot bad';
     statusTxt.textContent = res.ok ? 'conectado' : `HTTP ${res.status}`;
   } catch {
@@ -30,139 +46,120 @@ async function pingHealth() {
   }
 }
 
-// ─── Tabs ──────────────────────────────────────────────────────────────────────
+// ─── Tabs de sección ──────────────────────────────────────────────────────────
 function initTabs() {
-  const tabs   = document.querySelectorAll('#tabs button');
-  const routes = document.querySelectorAll('.route');
-  tabs.forEach(btn => {
+  document.querySelectorAll('#tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
-      tabs.forEach(b => b.classList.remove('active'));
-      routes.forEach(r => r.classList.remove('active'));
+      document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.route').forEach(r => r.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`route-${btn.dataset.route}`)?.classList.add('active');
     });
   });
 }
 
-// ─── Selector de documento para /dep ──────────────────────────────────────────
-function refreshDepSelector() {
-  const sel = document.getElementById('depDocIndex');
-  if (!sel) return;
-  const corpus = getCorpus();
-  const prev = sel.value;
-  sel.innerHTML = corpus
-    .map((doc, i) => `<option value="${i}">${i + 1}. ${doc.substring(0, 50)}${doc.length > 50 ? '…' : ''}</option>`)
-    .join('');
-  // Restaurar selección si sigue siendo válida
-  if (prev && parseInt(prev) < corpus.length) sel.value = prev;
-}
+// ─── Mini-tabs por documento ──────────────────────────────────────────────────
+/**
+ * Crea mini-tabs numerados (Doc 1, Doc 2 …) dentro de `containerEl`.
+ * Cuando el usuario pulsa uno, llama onSelect(index).
+ * Retorna la función selectTab(index) para poder activar el primero externamente.
+ */
+function buildDocTabs(containerEl, count, onSelect) {
+  containerEl.innerHTML = '';
+  const btns = [];
 
-// ─── Lista dinámica del corpus compartido ─────────────────────────────────────
-function setupSharedCorpus() {
-  const list      = document.getElementById('sharedCorpus');
-  const addBtn    = document.getElementById('addDoc');
-  const removeBtn = document.getElementById('removeDoc');
-
-  const onChange = () => refreshDepSelector();
-
-  // Observar cambios en los inputs existentes
-  list.querySelectorAll('input').forEach(inp => inp.addEventListener('input', onChange));
-
-  addBtn?.addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = 'nuevo documento…';
-    input.addEventListener('input', onChange);
-    list.appendChild(input);
-    refreshDepSelector();
-  });
-
-  removeBtn?.addEventListener('click', () => {
-    if (list.children.length > 1) {
-      list.removeChild(list.lastElementChild);
-      refreshDepSelector();
-    }
-  });
-}
-
-// ─── Envío de solicitudes ─────────────────────────────────────────────────────
-async function sendRequest(endpoint) {
-  const btn = document.querySelector(`.send[data-endpoint="${endpoint}"]`);
-  const out = document.querySelector(`[data-out="${endpoint}"]`);
-
-  btn.disabled = true;
-  out.classList.remove('empty');
-  out.textContent = 'esperando respuesta…';
-
-  const corpus = getCorpus();
-  let url, body, expectHtml = false;
-
-  if (endpoint === 'clean') {
-    url  = `${getBaseUrl()}/api/v1/clean`;
-    body = JSON.stringify({ text: corpus });
-
-  } else if (endpoint === 'pos') {
-    url  = `${getBaseUrl()}/api/v1/pos`;
-    body = JSON.stringify({ text: corpus });
-
-  } else if (endpoint === 'ner') {
-    url  = `${getBaseUrl()}/api/v1/ner`;
-    body = JSON.stringify({ text: corpus });
-
-  } else if (endpoint === 'dep') {
-    // /visualize/dep solo acepta un único string
-    const idx = parseInt(document.getElementById('depDocIndex').value) || 0;
-    const text = corpus[idx] ?? corpus[0];
-    url        = `${getBaseUrl()}/api/v1/visualize/dep`;
-    expectHtml = true;
-    body       = JSON.stringify({ text });
-
-  } else if (endpoint === 'vectorize') {
-    url  = `${getBaseUrl()}/api/v1/vectorize`;
-    body = JSON.stringify({ documents: corpus });
-  }
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
+  for (let i = 0; i < count; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'doc-tab';
+    btn.textContent = `Doc ${i + 1}`;
+    btn.addEventListener('click', () => {
+      btns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      onSelect(i);
     });
-
-    if (expectHtml) {
-      const html = await res.text();
-      const depBox = document.getElementById('dep-preview');
-      if (depBox) depBox.innerHTML = html;
-      out.textContent = res.ok
-        ? `✓ SVG renderizado (documento ${(parseInt(document.getElementById('depDocIndex').value) || 0) + 1}).`
-        : `HTTP ${res.status}\n${html}`;
-    } else {
-      const data = await res.json();
-      out.textContent = JSON.stringify(data, null, 2);
-      if (!res.ok) {
-        out.innerHTML = `<span class="err">HTTP ${res.status}</span>\n` + JSON.stringify(data, null, 2);
-      }
-      if (endpoint === 'vectorize' && res.ok) renderVectorTable(data);
-    }
-  } catch (e) {
-    out.innerHTML = `<span class="err">Error de red: ${e.message}</span>\n\n¿Está uvicorn corriendo? ¿El puerto 8000 está abierto en el Security Group?`;
-  } finally {
-    btn.disabled = false;
+    containerEl.appendChild(btn);
+    btns.push(btn);
   }
+
+  return (idx) => {
+    btns.forEach(b => b.classList.remove('active'));
+    if (btns[idx]) btns[idx].classList.add('active');
+    onSelect(idx);
+  };
 }
 
-// ─── Tabla de vectorización ───────────────────────────────────────────────────
-function renderVectorTable(data) {
-  const container = document.getElementById('vector-table-container');
-  if (!container) return;
-  container.innerHTML = '';
+// ─── Renderizadores por sección ───────────────────────────────────────────────
 
-  const { vocabulary, bag_of_words, tf_idf } = data;
+function renderClean() {
+  const tabsEl = document.getElementById('clean-doc-tabs');
+  const outEl  = document.getElementById('clean-out');
+  if (!state.clean) return;
+
+  const items = state.clean.cleaned_text;
+  outEl.classList.remove('empty');
+
+  const select = buildDocTabs(tabsEl, items.length, (i) => {
+    outEl.textContent = JSON.stringify({ doc: i + 1, cleaned_text: items[i] }, null, 2);
+  });
+  select(0);
+}
+
+function renderPos() {
+  const tabsEl = document.getElementById('pos-doc-tabs');
+  const outEl  = document.getElementById('pos-out');
+  if (!state.pos) return;
+
+  const results = state.pos.results;
+  outEl.classList.remove('empty');
+
+  const select = buildDocTabs(tabsEl, results.length, (i) => {
+    outEl.textContent = JSON.stringify({ doc: i + 1, tokens: results[i] }, null, 2);
+  });
+  select(0);
+}
+
+function renderNer() {
+  const tabsEl = document.getElementById('ner-doc-tabs');
+  const outEl  = document.getElementById('ner-out');
+  if (!state.ner) return;
+
+  const results = state.ner.results;
+  outEl.classList.remove('empty');
+
+  const select = buildDocTabs(tabsEl, results.length, (i) => {
+    outEl.textContent = JSON.stringify({ doc: i + 1, entities: results[i] }, null, 2);
+  });
+  select(0);
+}
+
+function renderDep() {
+  const tabsEl  = document.getElementById('dep-doc-tabs');
+  const preview = document.getElementById('dep-preview');
+  if (!state.dep.length) return;
+
+  preview.innerHTML = '';
+
+  // Muestra el SVG del documento seleccionado
+  const select = buildDocTabs(tabsEl, state.dep.length, (i) => {
+    preview.innerHTML = state.dep[i];  // HTML completo con el SVG
+  });
+  select(0);
+}
+
+function renderVectorize() {
+  const container = document.getElementById('vector-table-container');
+  const outEl     = document.getElementById('vectorize-out');
+  if (!state.vectorize) return;
+
+  outEl.classList.remove('empty');
+  outEl.textContent = JSON.stringify(state.vectorize, null, 2);
+
+  const { vocabulary, bag_of_words, tf_idf } = state.vectorize;
   if (!vocabulary?.length) return;
 
   function makeTable(title, rows) {
-    const headers  = vocabulary.map(v => `<th>${v}</th>`).join('');
-    const bodyRows = rows.map((row, i) =>
+    const ths  = vocabulary.map(v => `<th>${v}</th>`).join('');
+    const trs  = rows.map((row, i) =>
       `<tr><td><strong>Doc ${i + 1}</strong></td>${row.map(v => `<td>${v}</td>`).join('')}</tr>`
     ).join('');
     return `
@@ -170,8 +167,8 @@ function renderVectorTable(data) {
         <div class="step-title">${title}</div>
         <div class="matrix-table-wrap">
           <table class="matrix-table">
-            <thead><tr><th>Doc</th>${headers}</tr></thead>
-            <tbody>${bodyRows}</tbody>
+            <thead><tr><th>Doc</th>${ths}</tr></thead>
+            <tbody>${trs}</tbody>
           </table>
         </div>
       </div>`;
@@ -182,16 +179,88 @@ function renderVectorTable(data) {
     makeTable('TF-IDF', tf_idf);
 }
 
+// ─── Procesamiento del corpus ─────────────────────────────────────────────────
+async function processCorpus() {
+  const corpus = getCorpus();
+  if (!corpus.length) return;
+
+  const btn    = document.getElementById('processBtn');
+  const status = document.getElementById('processStatus');
+
+  btn.disabled = true;
+  status.textContent = 'procesando…';
+  status.className   = 'process-status running';
+
+  const base = getBaseUrl();
+  state.corpus = corpus;
+
+  // Llamadas a clean / pos / ner / vectorize en paralelo.
+  // dep necesita una petición por documento (endpoint no admite batch).
+  const depRequests = corpus.map(text =>
+    fetch(`${base}/api/v1/visualize/dep`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }).then(r => r.text())
+  );
+
+  try {
+    const [cleanRes, posRes, nerRes, vectorizeRes, ...depResolved] = await Promise.all([
+      fetch(`${base}/api/v1/clean`,     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: corpus }) }).then(r => r.json()),
+      fetch(`${base}/api/v1/pos`,       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: corpus }) }).then(r => r.json()),
+      fetch(`${base}/api/v1/ner`,       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: corpus }) }).then(r => r.json()),
+      fetch(`${base}/api/v1/vectorize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documents: corpus }) }).then(r => r.json()),
+      ...depRequests,
+    ]);
+
+    state.clean     = cleanRes;
+    state.pos       = posRes;
+    state.ner       = nerRes;
+    state.vectorize = vectorizeRes;
+    state.dep       = depResolved;
+
+    // Renderizar todas las vistas
+    renderClean();
+    renderPos();
+    renderNer();
+    renderDep();
+    renderVectorize();
+
+    status.textContent = `✓ listo — ${corpus.length} documento${corpus.length > 1 ? 's' : ''} procesado${corpus.length > 1 ? 's' : ''}`;
+    status.className   = 'process-status ok';
+  } catch (e) {
+    status.textContent = `✗ error: ${e.message}`;
+    status.className   = 'process-status error';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ─── Corpus dinámico ──────────────────────────────────────────────────────────
+function setupSharedCorpus() {
+  const list      = document.getElementById('sharedCorpus');
+  const addBtn    = document.getElementById('addDoc');
+  const removeBtn = document.getElementById('removeDoc');
+
+  addBtn?.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'nuevo documento…';
+    list.appendChild(input);
+  });
+
+  removeBtn?.addEventListener('click', () => {
+    if (list.children.length > 1) list.removeChild(list.lastElementChild);
+  });
+}
+
 // ─── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   setupSharedCorpus();
-  refreshDepSelector();
 
   baseUrlInput.addEventListener('change', pingHealth);
   pingHealth();
 
-  document.querySelectorAll('.send').forEach(btn => {
-    btn.addEventListener('click', () => sendRequest(btn.dataset.endpoint));
-  });
+  document.getElementById('processBtn').addEventListener('click', processCorpus);
 });

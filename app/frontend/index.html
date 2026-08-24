@@ -13,7 +13,6 @@
     <div class="sub">FastAPI + spaCy &mdash; /api/v1/clean &nbsp;/pos &nbsp;/ner &nbsp;/visualize/dep &nbsp;/vectorize</div>
   </header>
 
-  <!-- Barra de conexión -->
   <section class="base-row">
     <span class="dot" id="statusDot"></span>
     <span class="status-txt" id="statusTxt">sin probar</span>
@@ -21,7 +20,7 @@
     <input id="baseUrl" type="text" placeholder="http://TU-IP:8000" value="http://localhost:8000">
   </section>
 
-  <!-- Corpus compartido -->
+  <!-- Corpus + botón único -->
   <section class="corpus-global">
     <div class="corpus-global-title">Corpus compartido</div>
     <div class="corpus-list" id="sharedCorpus">
@@ -33,11 +32,14 @@
       <button id="addDoc">+ agregar documento</button>
       <button id="removeDoc">− quitar último</button>
     </div>
+    <div class="corpus-send-row">
+      <button id="processBtn" class="send">Procesar corpus →</button>
+      <span id="processStatus" class="process-status"></span>
+    </div>
   </section>
 
-  <!-- Tabs -->
   <nav id="tabs">
-    <button data-route="clean"  class="active">/api/v1/clean</button>
+    <button data-route="clean" class="active">/api/v1/clean</button>
     <button data-route="pos">/api/v1/pos</button>
     <button data-route="ner">/api/v1/ner</button>
     <button data-route="dep">/api/v1/visualize/dep</button>
@@ -46,73 +48,56 @@
 
   <main>
 
-    <!-- 1. /api/v1/clean -->
+    <!-- clean -->
     <section class="route active" id="route-clean">
       <div class="desc">
-        Limpieza de texto: minúsculas, elimina stopwords y puntuación, normaliza espacios.<br>
-        Procesa el corpus completo como lote. Retorna <code>cleaned_text: [...]</code>.
+        Limpieza: minúsculas, elimina stopwords y puntuación, normaliza espacios.<br>
+        Retorna <code>cleaned_text[i]</code> para cada documento del corpus.
       </div>
-      <div class="method-row">
-        <button class="send" data-endpoint="clean">enviar corpus →</button>
-      </div>
-      <div class="out-head">respuesta json</div>
-      <pre class="out empty" data-out="clean">esperando…</pre>
+      <div class="doc-tabs" id="clean-doc-tabs"></div>
+      <pre class="out empty" id="clean-out">procesa el corpus primero →</pre>
     </section>
 
-    <!-- 2. /api/v1/pos -->
+    <!-- pos -->
     <section class="route" id="route-pos">
       <div class="desc">
         Análisis POS: tokens con <code>text</code>, <code>pos</code> (UPOS) y <code>lemma</code>.<br>
-        Procesa el corpus completo como lote. Retorna <code>results[i]</code> para cada documento <code>i</code>.
+        Retorna <code>results[i]</code> para cada documento del corpus.
       </div>
-      <div class="method-row">
-        <button class="send" data-endpoint="pos">enviar corpus →</button>
-      </div>
-      <div class="out-head">respuesta json</div>
-      <pre class="out empty" data-out="pos">esperando…</pre>
+      <div class="doc-tabs" id="pos-doc-tabs"></div>
+      <pre class="out empty" id="pos-out">procesa el corpus primero →</pre>
     </section>
 
-    <!-- 3. /api/v1/ner -->
+    <!-- ner -->
     <section class="route" id="route-ner">
       <div class="desc">
-        Reconocimiento de entidades nombradas: <code>text</code>, <code>label</code>, <code>start</code>, <code>end</code>.<br>
-        Procesa el corpus completo como lote. Retorna <code>results[i]</code> para cada documento <code>i</code>.
+        Entidades nombradas: <code>text</code>, <code>label</code>, <code>start</code>, <code>end</code>.<br>
+        Retorna <code>results[i]</code> para cada documento del corpus.
       </div>
-      <div class="method-row">
-        <button class="send" data-endpoint="ner">enviar corpus →</button>
-      </div>
-      <div class="out-head">respuesta json</div>
-      <pre class="out empty" data-out="ner">esperando…</pre>
+      <div class="doc-tabs" id="ner-doc-tabs"></div>
+      <pre class="out empty" id="ner-out">procesa el corpus primero →</pre>
     </section>
 
-    <!-- 4. /api/v1/visualize/dep -->
+    <!-- dep -->
     <section class="route" id="route-dep">
       <div class="desc">
-        Visualización de dependencias sintácticas (displaCy).<br>
-        Solo acepta un documento por solicitud. Selecciona cuál del corpus quieres visualizar.
+        Visualización de dependencias (displaCy). Genera el árbol SVG de cada documento.
       </div>
-      <div class="method-row">
-        <label for="depDocIndex" style="color:var(--dim);font-size:12px;">Documento:</label>
-        <select id="depDocIndex"></select>
-        <button class="send" data-endpoint="dep">enviar →</button>
+      <div class="doc-tabs" id="dep-doc-tabs"></div>
+      <div class="tree-preview" id="dep-preview">
+        <div class="empty-hint">procesa el corpus primero →</div>
       </div>
-      <div class="tree-preview" id="dep-preview"></div>
-      <div class="out-head">estado</div>
-      <pre class="out empty" data-out="dep">esperando…</pre>
     </section>
 
-    <!-- 5. /api/v1/vectorize -->
+    <!-- vectorize -->
     <section class="route" id="route-vectorize">
       <div class="desc">
-        Vectorización de corpus: vocabulario lexicográfico, One-Hot, Bag of Words y TF-IDF.<br>
-        Usa el corpus completo. Retorna <code>vocabulary, bag_of_words, one_hot, tf_idf</code>.
+        Vectorización: vocabulario lexicográfico, One-Hot, Bag of Words y TF-IDF.
       </div>
-      <div class="method-row">
-        <button class="send" data-endpoint="vectorize">enviar corpus →</button>
+      <div id="vector-table-container">
+        <div class="empty-hint">procesa el corpus primero →</div>
       </div>
-      <div id="vector-table-container"></div>
-      <div class="out-head">respuesta json</div>
-      <pre class="out empty" data-out="vectorize">esperando…</pre>
+      <pre class="out empty" id="vectorize-out">procesa el corpus primero →</pre>
     </section>
 
   </main>
