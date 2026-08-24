@@ -20,6 +20,12 @@ API_DESCRIPTION: str = (
 )
 API_VERSION: str = "1.0.0"
 
+# Lambda Function URL (despliegue serverless)
+LAMBDA_URL: str = os.getenv(
+    "LAMBDA_URL",
+    "https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws",
+)
+
 # CORS
 # allow_credentials=True es incompatible con allow_origins=["*"] en los navegadores,
 # por eso se usa allow_origins=["*"] + allow_credentials=False (ver api_ec2/main.py).

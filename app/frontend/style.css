@@ -479,3 +479,69 @@ pre.out.empty {
   font-size: 13px;
   padding: 16px 0;
 }
+
+/* ── URL group (EC2 + Lambda inputs) ───────────────────────────────── */
+.url-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.url-group label {
+  color: var(--dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.url-group input,
+.url-group select {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 7px 9px;
+  border-radius: 3px;
+}
+
+.url-group input:focus,
+.url-group select:focus {
+  outline: 1px solid var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── Layout dual EC2 / Lambda ──────────────────────────────────────── */
+.dual-out {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+@media (max-width: 800px) {
+  .dual-out { grid-template-columns: 1fr; }
+}
+
+.dual-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dual-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 3px;
+  display: inline-block;
+  align-self: flex-start;
+}
+
+.ec2-label    { background: #1a2a3a; color: #58a6e6; border: 1px solid #254a6a; }
+.lambda-label { background: #2a1a10; color: #e6a858; border: 1px solid #6a4018; }

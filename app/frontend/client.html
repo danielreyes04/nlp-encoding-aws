@@ -13,14 +13,33 @@
     <div class="sub">FastAPI + spaCy &mdash; /api/v1/clean &nbsp;/pos &nbsp;/ner &nbsp;/visualize/dep &nbsp;/vectorize</div>
   </header>
 
+  <!-- Barra de conexión -->
   <section class="base-row">
     <span class="dot" id="statusDot"></span>
     <span class="status-txt" id="statusTxt">sin probar</span>
-    <label for="baseUrl">URL base</label>
-    <input id="baseUrl" type="text" placeholder="http://TU-IP:8000" value="http://localhost:8000">
+
+    <div class="url-group">
+      <label>EC2</label>
+      <input id="ec2Url" type="text" placeholder="http://TU-IP-EC2:8000" value="http://localhost:8000">
+    </div>
+    <div class="url-group">
+      <label>Lambda</label>
+      <input id="lambdaUrl" type="text"
+        value="https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws">
+    </div>
+
+    <!-- Selector de entorno activo (para la pestaña dep, que muestra una sola respuesta) -->
+    <div class="url-group">
+      <label>Mostrar</label>
+      <select id="activeEnv">
+        <option value="ec2">EC2</option>
+        <option value="lambda">Lambda</option>
+        <option value="both" selected>Ambos</option>
+      </select>
+    </div>
   </section>
 
-  <!-- Corpus + botón único -->
+  <!-- Corpus compartido -->
   <section class="corpus-global">
     <div class="corpus-global-title">Corpus compartido</div>
     <div class="corpus-list" id="sharedCorpus">
@@ -38,6 +57,7 @@
     </div>
   </section>
 
+  <!-- Tabs -->
   <nav id="tabs">
     <button data-route="clean" class="active">/api/v1/clean</button>
     <button data-route="pos">/api/v1/pos</button>
@@ -51,41 +71,77 @@
     <!-- clean -->
     <section class="route active" id="route-clean">
       <div class="desc">
-        Limpieza: minúsculas, elimina stopwords y puntuación, normaliza espacios.<br>
-        Retorna <code>cleaned_text[i]</code> para cada documento del corpus.
+        Limpieza: minúsculas, elimina stopwords y puntuación, normaliza espacios.
+        Retorna <code>cleaned_text[i]</code> para cada documento.
       </div>
       <div class="doc-tabs" id="clean-doc-tabs"></div>
-      <pre class="out empty" id="clean-out">procesa el corpus primero →</pre>
+      <div class="dual-out" id="clean-dual">
+        <div class="dual-col">
+          <div class="dual-label ec2-label">EC2</div>
+          <pre class="out empty" id="clean-out-ec2">procesa el corpus →</pre>
+        </div>
+        <div class="dual-col">
+          <div class="dual-label lambda-label">Lambda</div>
+          <pre class="out empty" id="clean-out-lambda">procesa el corpus →</pre>
+        </div>
+      </div>
     </section>
 
     <!-- pos -->
     <section class="route" id="route-pos">
       <div class="desc">
-        Análisis POS: tokens con <code>text</code>, <code>pos</code> (UPOS) y <code>lemma</code>.<br>
-        Retorna <code>results[i]</code> para cada documento del corpus.
+        Análisis POS: <code>text</code>, <code>pos</code> (UPOS) y <code>lemma</code> por token.
       </div>
       <div class="doc-tabs" id="pos-doc-tabs"></div>
-      <pre class="out empty" id="pos-out">procesa el corpus primero →</pre>
+      <div class="dual-out" id="pos-dual">
+        <div class="dual-col">
+          <div class="dual-label ec2-label">EC2</div>
+          <pre class="out empty" id="pos-out-ec2">procesa el corpus →</pre>
+        </div>
+        <div class="dual-col">
+          <div class="dual-label lambda-label">Lambda</div>
+          <pre class="out empty" id="pos-out-lambda">procesa el corpus →</pre>
+        </div>
+      </div>
     </section>
 
     <!-- ner -->
     <section class="route" id="route-ner">
       <div class="desc">
-        Entidades nombradas: <code>text</code>, <code>label</code>, <code>start</code>, <code>end</code>.<br>
-        Retorna <code>results[i]</code> para cada documento del corpus.
+        Entidades nombradas: <code>text</code>, <code>label</code>, <code>start</code>, <code>end</code>.
       </div>
       <div class="doc-tabs" id="ner-doc-tabs"></div>
-      <pre class="out empty" id="ner-out">procesa el corpus primero →</pre>
+      <div class="dual-out" id="ner-dual">
+        <div class="dual-col">
+          <div class="dual-label ec2-label">EC2</div>
+          <pre class="out empty" id="ner-out-ec2">procesa el corpus →</pre>
+        </div>
+        <div class="dual-col">
+          <div class="dual-label lambda-label">Lambda</div>
+          <pre class="out empty" id="ner-out-lambda">procesa el corpus →</pre>
+        </div>
+      </div>
     </section>
 
     <!-- dep -->
     <section class="route" id="route-dep">
       <div class="desc">
-        Visualización de dependencias (displaCy). Genera el árbol SVG de cada documento.
+        Visualización de dependencias (displaCy). Un SVG por documento, generado en ambos entornos.
       </div>
       <div class="doc-tabs" id="dep-doc-tabs"></div>
-      <div class="tree-preview" id="dep-preview">
-        <div class="empty-hint">procesa el corpus primero →</div>
+      <div class="dual-out" id="dep-dual">
+        <div class="dual-col">
+          <div class="dual-label ec2-label">EC2</div>
+          <div class="tree-preview" id="dep-preview-ec2">
+            <div class="empty-hint">procesa el corpus →</div>
+          </div>
+        </div>
+        <div class="dual-col">
+          <div class="dual-label lambda-label">Lambda</div>
+          <div class="tree-preview" id="dep-preview-lambda">
+            <div class="empty-hint">procesa el corpus →</div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -94,10 +150,18 @@
       <div class="desc">
         Vectorización: vocabulario lexicográfico, One-Hot, Bag of Words y TF-IDF.
       </div>
-      <div id="vector-table-container">
-        <div class="empty-hint">procesa el corpus primero →</div>
+      <div class="dual-out" id="vectorize-dual">
+        <div class="dual-col">
+          <div class="dual-label ec2-label">EC2</div>
+          <div id="vector-table-ec2"><div class="empty-hint">procesa el corpus →</div></div>
+          <pre class="out empty" id="vectorize-out-ec2">procesa el corpus →</pre>
+        </div>
+        <div class="dual-col">
+          <div class="dual-label lambda-label">Lambda</div>
+          <div id="vector-table-lambda"><div class="empty-hint">procesa el corpus →</div></div>
+          <pre class="out empty" id="vectorize-out-lambda">procesa el corpus →</pre>
+        </div>
       </div>
-      <pre class="out empty" id="vectorize-out">procesa el corpus primero →</pre>
     </section>
 
   </main>
