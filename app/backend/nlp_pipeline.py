@@ -63,16 +63,16 @@ def clean_text(text: str) -> str:
     nlp = get_nlp()
     # Reemplazar signos de puntuación por espacios antes de procesar,
     # para que no concatenen términos adyacentes.
+    # Se conservan mayúsculas para que spaCy lematice bien,
+    # y se aplica .lower() solo al texto del token resultante.
     text_pre = re.sub(r'[^\w\s]', ' ', text, flags=re.UNICODE)
-    doc = nlp(text_pre.lower())
+    doc = nlp(text_pre)
 
     tokens = []
     for tok in doc:
-        # Saltar stopwords, espacios y tokens vacíos
         if tok.is_stop or tok.is_space or not tok.text.strip():
             continue
-        # Conservar sólo el texto (ya en minúsculas)
-        tokens.append(tok.text)
+        tokens.append(tok.text.lower())
 
     return ' '.join(tokens)
 
@@ -174,10 +174,16 @@ def _lemmatize_for_vocab(text: str) -> list[str]:
     """
     Aplica la misma limpieza que clean_text pero retorna la lista de
     lemas (en minúsculas) que se usarán para construir el vocabulario.
+
+    Se procesa el texto ORIGINAL (sin bajar a minúsculas antes) para que
+    spaCy tenga el contexto morfológico completo y lematice correctamente.
+    El .lower() se aplica solo al lema resultante.
     """
     nlp = get_nlp()
+    # Reemplazar puntuación por espacios (igual que clean_text) pero
+    # conservar las mayúsculas para que spaCy lematice bien
     text_pre = re.sub(r'[^\w\s]', ' ', text, flags=re.UNICODE)
-    doc = nlp(text_pre.lower())
+    doc = nlp(text_pre)
     return [
         tok.lemma_.lower()
         for tok in doc
