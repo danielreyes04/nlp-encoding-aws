@@ -237,6 +237,7 @@ async function processCorpus() {
   renderNer();
   renderDep();
   renderVectorize();
+  applyEnvFilter(); // aplicar el filtro activo sobre los datos recién cargados
 
   const okEc2    = !!(ec2Clean || ec2Pos || ec2Ner || ec2Vec);
   const okLambda = !!(lClean   || lPos   || lNer   || lVec);
@@ -248,6 +249,28 @@ async function processCorpus() {
   status.textContent = `✓ ${corpus.length} doc${corpus.length > 1 ? 's' : ''} — ${label}`;
   status.className   = (okEc2 && okLambda) ? 'process-status ok' : 'process-status running';
   btn.disabled = false;
+}
+
+// ─── Selector Mostrar (EC2 / Lambda / Ambos) ─────────────────────────────────
+function applyEnvFilter() {
+  const val = document.getElementById('activeEnv').value;
+  document.querySelectorAll('.dual-col').forEach(col => {
+    const isEc2    = col.querySelector('.ec2-label') !== null;
+    const isLambda = col.querySelector('.lambda-label') !== null;
+    if (val === 'both') {
+      col.style.display = '';
+    } else if (val === 'ec2' && isEc2) {
+      col.style.display = '';
+    } else if (val === 'lambda' && isLambda) {
+      col.style.display = '';
+    } else {
+      col.style.display = 'none';
+    }
+  });
+  // Cuando solo se muestra uno, ocupa el ancho completo
+  document.querySelectorAll('.dual-out').forEach(row => {
+    row.style.gridTemplateColumns = val === 'both' ? '' : '1fr';
+  });
 }
 
 // ─── Corpus dinámico ──────────────────────────────────────────────────────────
@@ -270,5 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
   pingHealth();
   document.getElementById('ec2Url').addEventListener('change', pingHealth);
   document.getElementById('lambdaUrl').addEventListener('change', pingHealth);
+  document.getElementById('activeEnv').addEventListener('change', applyEnvFilter);
   document.getElementById('processBtn').addEventListener('click', processCorpus);
 });
