@@ -15,9 +15,10 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.backend.config import API_TITLE, API_DESCRIPTION, API_VERSION, CORS_ORIGINS
 from app.backend.nlp_pipeline import (
@@ -43,6 +44,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Archivos estáticos del frontend
+_static_dir = Path(__file__).resolve().parent.parent / "app" / "frontend"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
 
 # ---------------------------------------------------------------------------
 # Health check
@@ -51,6 +57,15 @@ app.add_middleware(
 @app.get("/", tags=["health"])
 def health():
     return {"status": "ok", "deployment": "EC2"}
+
+
+@app.get("/client", include_in_schema=False)
+@app.get("/ui", include_in_schema=False)
+def serve_client():
+    client_path = _static_dir / "client.html"
+    if client_path.exists():
+        return FileResponse(str(client_path))
+    raise HTTPException(status_code=404, detail="Cliente web no encontrado")
 
 
 # ---------------------------------------------------------------------------
