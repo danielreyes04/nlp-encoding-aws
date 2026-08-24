@@ -410,3 +410,19 @@ pre.out.empty {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ── Corpus compartido ─────────────────────────────────────────────── */
+.corpus-global {
+  padding: 16px 28px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.corpus-global-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--accent);
+  margin-bottom: 10px;
+  font-weight: 600;
+}

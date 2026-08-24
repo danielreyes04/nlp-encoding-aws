@@ -13,6 +13,7 @@
     <div class="sub">FastAPI + spaCy &mdash; /api/v1/clean &nbsp;/pos &nbsp;/ner &nbsp;/visualize/dep &nbsp;/vectorize</div>
   </header>
 
+  <!-- Barra de conexión -->
   <section class="base-row">
     <span class="dot" id="statusDot"></span>
     <span class="status-txt" id="statusTxt">sin probar</span>
@@ -20,6 +21,21 @@
     <input id="baseUrl" type="text" placeholder="http://TU-IP:8000" value="http://localhost:8000">
   </section>
 
+  <!-- Corpus compartido -->
+  <section class="corpus-global">
+    <div class="corpus-global-title">Corpus compartido</div>
+    <div class="corpus-list" id="sharedCorpus">
+      <input type="text" value="Mi gato, su gato y nuestro gato comen pescado">
+      <input type="text" value="Juan comió en Bogotá">
+      <input type="text" value="El caballo corre muy rápido">
+    </div>
+    <div class="corpus-actions">
+      <button id="addDoc">+ agregar documento</button>
+      <button id="removeDoc">− quitar último</button>
+    </div>
+  </section>
+
+  <!-- Tabs -->
   <nav id="tabs">
     <button data-route="clean"  class="active">/api/v1/clean</button>
     <button data-route="pos">/api/v1/pos</button>
@@ -34,12 +50,10 @@
     <section class="route active" id="route-clean">
       <div class="desc">
         Limpieza de texto: minúsculas, elimina stopwords y puntuación, normaliza espacios.<br>
-        Envía <code>{"text": "..."}</code> o <code>{"text": ["doc1", "doc2"]}</code>.
-        Retorna <code>cleaned_text: [...]</code>.
+        Procesa el corpus completo como lote. Retorna <code>cleaned_text: [...]</code>.
       </div>
-      <textarea data-text placeholder="Mi gato, su gato y nuestro gato comen pescado.">Mi gato, su gato y nuestro gato comen pescado.</textarea>
       <div class="method-row">
-        <button class="send" data-endpoint="clean">enviar →</button>
+        <button class="send" data-endpoint="clean">enviar corpus →</button>
       </div>
       <div class="out-head">respuesta json</div>
       <pre class="out empty" data-out="clean">esperando…</pre>
@@ -49,11 +63,10 @@
     <section class="route" id="route-pos">
       <div class="desc">
         Análisis POS: tokens con <code>text</code>, <code>pos</code> (UPOS) y <code>lemma</code>.<br>
-        Acepta texto único o lote. Retorna <code>results: [[{text, pos, lemma}, ...], ...]</code>.
+        Procesa el corpus completo como lote. Retorna <code>results[i]</code> para cada documento <code>i</code>.
       </div>
-      <textarea data-text placeholder="Juan comió pescado en Bogotá.">Juan comió pescado en Bogotá.</textarea>
       <div class="method-row">
-        <button class="send" data-endpoint="pos">enviar →</button>
+        <button class="send" data-endpoint="pos">enviar corpus →</button>
       </div>
       <div class="out-head">respuesta json</div>
       <pre class="out empty" data-out="pos">esperando…</pre>
@@ -63,11 +76,10 @@
     <section class="route" id="route-ner">
       <div class="desc">
         Reconocimiento de entidades nombradas: <code>text</code>, <code>label</code>, <code>start</code>, <code>end</code>.<br>
-        Acepta texto único o lote. Retorna <code>results: [[{text, label, start, end}, ...], ...]</code>.
+        Procesa el corpus completo como lote. Retorna <code>results[i]</code> para cada documento <code>i</code>.
       </div>
-      <textarea data-text placeholder="Juan viajó a Bogotá con María.">Juan viajó a Bogotá con María.</textarea>
       <div class="method-row">
-        <button class="send" data-endpoint="ner">enviar →</button>
+        <button class="send" data-endpoint="ner">enviar corpus →</button>
       </div>
       <div class="out-head">respuesta json</div>
       <pre class="out empty" data-out="ner">esperando…</pre>
@@ -77,10 +89,11 @@
     <section class="route" id="route-dep">
       <div class="desc">
         Visualización de dependencias sintácticas (displaCy).<br>
-        Solo acepta un único string. Retorna HTML con SVG embebido.
+        Solo acepta un documento por solicitud. Se procesa cada documento del corpus por separado.
       </div>
-      <textarea data-text placeholder="El caballo corre muy rápido.">El caballo corre muy rápido.</textarea>
       <div class="method-row">
+        <label for="depDocIndex" style="color:var(--dim);font-size:12px;">Documento:</label>
+        <select id="depDocIndex"></select>
         <button class="send" data-endpoint="dep">enviar →</button>
       </div>
       <div class="tree-preview" id="dep-preview"></div>
@@ -92,19 +105,10 @@
     <section class="route" id="route-vectorize">
       <div class="desc">
         Vectorización de corpus: vocabulario lexicográfico, One-Hot, Bag of Words y TF-IDF.<br>
-        Requiere al menos 2 documentos. Retorna <code>vocabulary, bag_of_words, one_hot, tf_idf</code>.
-      </div>
-      <div class="corpus-list" id="vectorizeList">
-        <input type="text" value="Mi gato, su gato y nuestro gato comen pescado">
-        <input type="text" value="Juan comió en Bogotá">
-        <input type="text" value="El caballo corre muy rápido">
-      </div>
-      <div class="corpus-actions">
-        <button id="addDoc">+ agregar documento</button>
-        <button id="removeDoc">− quitar último</button>
+        Usa el corpus completo. Retorna <code>vocabulary, bag_of_words, one_hot, tf_idf</code>.
       </div>
       <div class="method-row">
-        <button class="send" data-endpoint="vectorize">enviar →</button>
+        <button class="send" data-endpoint="vectorize">enviar corpus →</button>
       </div>
       <div id="vector-table-container"></div>
       <div class="out-head">respuesta json</div>

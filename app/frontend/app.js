@@ -1,6 +1,6 @@
 /**
- * app.js — Cliente interactivo para NLP Pipeline API
- * Contrato: /api/v1/clean | /pos | /ner | /visualize/dep | /vectorize
+ * app.js — Cliente interactivo NLP Pipeline API
+ * Corpus compartido: todas las pestañas leen de #sharedCorpus.
  */
 
 const baseUrlInput = document.getElementById('baseUrl');
@@ -11,7 +11,14 @@ function getBaseUrl() {
   return baseUrlInput.value.trim().replace(/\/$/, '');
 }
 
-// ─── Health check ────────────────────────────────────────────────────────────
+/** Lee los documentos del corpus compartido (filtra vacíos). */
+function getCorpus() {
+  return Array.from(document.querySelectorAll('#sharedCorpus input'))
+    .map(i => i.value.trim())
+    .filter(Boolean);
+}
+
+// ─── Health check ─────────────────────────────────────────────────────────────
 async function pingHealth() {
   try {
     const res = await fetch(`${getBaseUrl()}/`, { method: 'GET' });
@@ -23,7 +30,7 @@ async function pingHealth() {
   }
 }
 
-// ─── Tabs ─────────────────────────────────────────────────────────────────────
+// ─── Tabs ──────────────────────────────────────────────────────────────────────
 function initTabs() {
   const tabs   = document.querySelectorAll('#tabs button');
   const routes = document.querySelectorAll('.route');
@@ -37,25 +44,48 @@ function initTabs() {
   });
 }
 
-// ─── Lista dinámica de documentos ────────────────────────────────────────────
-function setupDynamicList(listId, addBtnId, removeBtnId) {
-  const list      = document.getElementById(listId);
-  const addBtn    = document.getElementById(addBtnId);
-  const removeBtn = document.getElementById(removeBtnId);
+// ─── Selector de documento para /dep ──────────────────────────────────────────
+function refreshDepSelector() {
+  const sel = document.getElementById('depDocIndex');
+  if (!sel) return;
+  const corpus = getCorpus();
+  const prev = sel.value;
+  sel.innerHTML = corpus
+    .map((doc, i) => `<option value="${i}">${i + 1}. ${doc.substring(0, 50)}${doc.length > 50 ? '…' : ''}</option>`)
+    .join('');
+  // Restaurar selección si sigue siendo válida
+  if (prev && parseInt(prev) < corpus.length) sel.value = prev;
+}
+
+// ─── Lista dinámica del corpus compartido ─────────────────────────────────────
+function setupSharedCorpus() {
+  const list      = document.getElementById('sharedCorpus');
+  const addBtn    = document.getElementById('addDoc');
+  const removeBtn = document.getElementById('removeDoc');
+
+  const onChange = () => refreshDepSelector();
+
+  // Observar cambios en los inputs existentes
+  list.querySelectorAll('input').forEach(inp => inp.addEventListener('input', onChange));
 
   addBtn?.addEventListener('click', () => {
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = 'nuevo documento…';
+    input.addEventListener('input', onChange);
     list.appendChild(input);
+    refreshDepSelector();
   });
 
   removeBtn?.addEventListener('click', () => {
-    if (list.children.length > 1) list.removeChild(list.lastElementChild);
+    if (list.children.length > 1) {
+      list.removeChild(list.lastElementChild);
+      refreshDepSelector();
+    }
   });
 }
 
-// ─── Envío genérico ───────────────────────────────────────────────────────────
+// ─── Envío de solicitudes ─────────────────────────────────────────────────────
 async function sendRequest(endpoint) {
   const btn = document.querySelector(`.send[data-endpoint="${endpoint}"]`);
   const out = document.querySelector(`[data-out="${endpoint}"]`);
@@ -64,35 +94,32 @@ async function sendRequest(endpoint) {
   out.classList.remove('empty');
   out.textContent = 'esperando respuesta…';
 
-  // Construir body según endpoint
+  const corpus = getCorpus();
   let url, body, expectHtml = false;
 
   if (endpoint === 'clean') {
     url  = `${getBaseUrl()}/api/v1/clean`;
-    const raw = document.querySelector('#route-clean textarea[data-text]').value.trim();
-    body = JSON.stringify({ text: raw });
+    body = JSON.stringify({ text: corpus });
 
   } else if (endpoint === 'pos') {
     url  = `${getBaseUrl()}/api/v1/pos`;
-    const raw = document.querySelector('#route-pos textarea[data-text]').value.trim();
-    body = JSON.stringify({ text: raw });
+    body = JSON.stringify({ text: corpus });
 
   } else if (endpoint === 'ner') {
     url  = `${getBaseUrl()}/api/v1/ner`;
-    const raw = document.querySelector('#route-ner textarea[data-text]').value.trim();
-    body = JSON.stringify({ text: raw });
+    body = JSON.stringify({ text: corpus });
 
   } else if (endpoint === 'dep') {
+    // /visualize/dep solo acepta un único string
+    const idx = parseInt(document.getElementById('depDocIndex').value) || 0;
+    const text = corpus[idx] ?? corpus[0];
     url        = `${getBaseUrl()}/api/v1/visualize/dep`;
     expectHtml = true;
-    const raw = document.querySelector('#route-dep textarea[data-text]').value.trim();
-    body = JSON.stringify({ text: raw });
+    body       = JSON.stringify({ text });
 
   } else if (endpoint === 'vectorize') {
     url  = `${getBaseUrl()}/api/v1/vectorize`;
-    const docs = Array.from(document.querySelectorAll('#vectorizeList input'))
-      .map(i => i.value.trim()).filter(Boolean);
-    body = JSON.stringify({ documents: docs });
+    body = JSON.stringify({ documents: corpus });
   }
 
   try {
@@ -103,12 +130,11 @@ async function sendRequest(endpoint) {
     });
 
     if (expectHtml) {
-      // /visualize/dep devuelve text/html con el SVG de displaCy
       const html = await res.text();
       const depBox = document.getElementById('dep-preview');
       if (depBox) depBox.innerHTML = html;
       out.textContent = res.ok
-        ? `✓ HTML recibido (${html.length} bytes). SVG renderizado arriba.`
+        ? `✓ SVG renderizado (documento ${(parseInt(document.getElementById('depDocIndex').value) || 0) + 1}).`
         : `HTTP ${res.status}\n${html}`;
     } else {
       const data = await res.json();
@@ -116,11 +142,10 @@ async function sendRequest(endpoint) {
       if (!res.ok) {
         out.innerHTML = `<span class="err">HTTP ${res.status}</span>\n` + JSON.stringify(data, null, 2);
       }
-      // Renderizar tabla de vectorización
       if (endpoint === 'vectorize' && res.ok) renderVectorTable(data);
     }
   } catch (e) {
-    out.innerHTML = `<span class="err">Error de red: ${e.message}</span>\n\n¿Está uvicorn corriendo? ¿El puerto está abierto en el Security Group?`;
+    out.innerHTML = `<span class="err">Error de red: ${e.message}</span>\n\n¿Está uvicorn corriendo? ¿El puerto 8000 está abierto en el Security Group?`;
   } finally {
     btn.disabled = false;
   }
@@ -132,11 +157,11 @@ function renderVectorTable(data) {
   if (!container) return;
   container.innerHTML = '';
 
-  const { vocabulary, bag_of_words, tf_idf, one_hot } = data;
-  if (!vocabulary || !vocabulary.length) return;
+  const { vocabulary, bag_of_words, tf_idf } = data;
+  if (!vocabulary?.length) return;
 
   function makeTable(title, rows) {
-    const headers = vocabulary.map(v => `<th>${v}</th>`).join('');
+    const headers  = vocabulary.map(v => `<th>${v}</th>`).join('');
     const bodyRows = rows.map((row, i) =>
       `<tr><td><strong>Doc ${i + 1}</strong></td>${row.map(v => `<td>${v}</td>`).join('')}</tr>`
     ).join('');
@@ -157,13 +182,14 @@ function renderVectorTable(data) {
     makeTable('TF-IDF', tf_idf);
 }
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// ─── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initTabs();
+  setupSharedCorpus();
+  refreshDepSelector();
+
   baseUrlInput.addEventListener('change', pingHealth);
   pingHealth();
-
-  setupDynamicList('vectorizeList', 'addDoc', 'removeDoc');
 
   document.querySelectorAll('.send').forEach(btn => {
     btn.addEventListener('click', () => sendRequest(btn.dataset.endpoint));
