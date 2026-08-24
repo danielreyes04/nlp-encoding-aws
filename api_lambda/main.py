@@ -144,4 +144,39 @@ def vectorize_endpoint(req: VectorizeRequest):
 # Handler para AWS Lambda
 # ---------------------------------------------------------------------------
 
-handler = Mangum(app, lifespan="off")
+# lifespan="off" evita errores de startup/shutdown en Lambda.
+# Si la Lambda Function URL tiene CORS deshabilitado en la consola,
+# Mangum inyecta los headers CORS desde el middleware de FastAPI.
+# Si la Lambda Function URL tiene CORS habilitado en la consola,
+# los headers de la consola tienen precedencia — ambas opciones funcionan.
+_mangum_handler = Mangum(app, lifespan="off")
+
+
+def handler(event, context):
+    """
+    Wrapper sobre Mangum que garantiza headers CORS en TODA respuesta,
+    incluyendo preflights OPTIONS que Lambda Function URL pueda no manejar.
+    """
+    # Manejar preflight OPTIONS directamente sin pasar por FastAPI
+    if event.get("requestContext", {}).get("http", {}).get("method") == "OPTIONS":
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                "Access-Control-Allow-Headers": "content-type,authorization",
+                "Access-Control-Max-Age": "86400",
+            },
+            "body": "",
+        }
+
+    response = _mangum_handler(event, context)
+
+    # Inyectar headers CORS en toda respuesta
+    if "headers" not in response or response["headers"] is None:
+        response["headers"] = {}
+    response["headers"]["Access-Control-Allow-Origin"]  = "*"
+    response["headers"]["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    response["headers"]["Access-Control-Allow-Headers"] = "content-type,authorization"
+
+    return response
