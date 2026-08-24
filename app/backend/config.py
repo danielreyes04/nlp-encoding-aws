@@ -21,5 +21,11 @@ API_DESCRIPTION: str = (
 API_VERSION: str = "1.0.0"
 
 # CORS
+# allow_credentials=True es incompatible con allow_origins=["*"] en los navegadores,
+# por eso se usa allow_origins=["*"] + allow_credentials=False (ver api_ec2/main.py).
 CORS_ORIGINS_RAW: str = os.getenv("CORS_ORIGINS", "*")
-CORS_ORIGINS: List[str] = [origin.strip() for origin in CORS_ORIGINS_RAW.split(",")] if CORS_ORIGINS_RAW != "*" else ["*"]
+CORS_ORIGINS: List[str] = (
+    [origin.strip() for origin in CORS_ORIGINS_RAW.split(",")]
+    if CORS_ORIGINS_RAW != "*"
+    else ["*"]
+)

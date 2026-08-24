@@ -3,127 +3,116 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>nlp_pipeline :: cliente</title>
-  <link rel="stylesheet" href="style.css">
+  <title>NLP API :: cliente</title>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-  <!-- Encabezado Principal -->
   <header class="top">
-    <h1>nlp_pipeline <span>:: cliente</span></h1>
-    <div class="sub">FastAPI + spaCy — /processed /dependency /ner /full /encoding /pipeline</div>
+    <h1>NLP Pipeline <span>:: cliente</span></h1>
+    <div class="sub">FastAPI + spaCy &mdash; /api/v1/clean &nbsp;/pos &nbsp;/ner &nbsp;/visualize/dep &nbsp;/vectorize</div>
   </header>
 
-  <!-- Barra de Configuración y Conexión -->
   <section class="base-row">
     <span class="dot" id="statusDot"></span>
     <span class="status-txt" id="statusTxt">sin probar</span>
     <label for="baseUrl">URL base</label>
-    <input id="baseUrl" type="text" placeholder="http://TU-IP-PUBLICA:8000" value="http://localhost:8000">
+    <input id="baseUrl" type="text" placeholder="http://TU-IP:8000" value="http://localhost:8000">
   </section>
 
-  <!-- Pestañas de Navegación -->
   <nav id="tabs">
-    <button data-route="processed" class="active">/processed</button>
-    <button data-route="dependency">/dependency</button>
-    <button data-route="ner">/ner</button>
-    <button data-route="full">/full</button>
-    <button data-route="encoding">/encoding</button>
-    <button data-route="pipeline">/pipeline (paso a paso)</button>
+    <button data-route="clean"  class="active">/api/v1/clean</button>
+    <button data-route="pos">/api/v1/pos</button>
+    <button data-route="ner">/api/v1/ner</button>
+    <button data-route="dep">/api/v1/visualize/dep</button>
+    <button data-route="vectorize">/api/v1/vectorize</button>
   </nav>
 
-  <!-- Rutas y Formularios -->
   <main>
 
-    <!-- 1. /processed -->
-    <section class="route active" id="route-processed">
-      <div class="desc">Limpieza + transformación + etiquetado. Envía <code>{"text": "..."}</code>, devuelve tokens con lema y POS.</div>
-      <textarea data-text placeholder="Mi gato, su gato y nuestro gato comen pescado">Mi gato, su gato y nuestro gato comen pescado</textarea>
-      <div class="method-row"><button class="send" data-endpoint="processed">enviar →</button></div>
-      <div class="out-head">respuesta json<span></span></div>
-      <pre class="out empty" data-out="processed">esperando…</pre>
+    <!-- 1. /api/v1/clean -->
+    <section class="route active" id="route-clean">
+      <div class="desc">
+        Limpieza de texto: minúsculas, elimina stopwords y puntuación, normaliza espacios.<br>
+        Envía <code>{"text": "..."}</code> o <code>{"text": ["doc1", "doc2"]}</code>.
+        Retorna <code>cleaned_text: [...]</code>.
+      </div>
+      <textarea data-text placeholder="Mi gato, su gato y nuestro gato comen pescado.">Mi gato, su gato y nuestro gato comen pescado.</textarea>
+      <div class="method-row">
+        <button class="send" data-endpoint="clean">enviar →</button>
+      </div>
+      <div class="out-head">respuesta json</div>
+      <pre class="out empty" data-out="clean">esperando…</pre>
     </section>
 
-    <!-- 2. /dependency -->
-    <section class="route" id="route-dependency">
-      <div class="desc">Análisis de dependencias sintácticas con relaciones gramaticales y árbol visual generado mediante spaCy displaCy.</div>
-      <textarea data-text placeholder="El caballo corre muy rapido">El caballo corre muy rapido</textarea>
-      <div class="method-row"><button class="send" data-endpoint="dependency">enviar →</button></div>
-      <div class="tree-preview" id="trees-dependency"></div>
-      <div class="out-head">respuesta json<span></span></div>
-      <pre class="out empty" data-out="dependency">esperando…</pre>
+    <!-- 2. /api/v1/pos -->
+    <section class="route" id="route-pos">
+      <div class="desc">
+        Análisis POS: tokens con <code>text</code>, <code>pos</code> (UPOS) y <code>lemma</code>.<br>
+        Acepta texto único o lote. Retorna <code>results: [[{text, pos, lemma}, ...], ...]</code>.
+      </div>
+      <textarea data-text placeholder="Juan comió pescado en Bogotá.">Juan comió pescado en Bogotá.</textarea>
+      <div class="method-row">
+        <button class="send" data-endpoint="pos">enviar →</button>
+      </div>
+      <div class="out-head">respuesta json</div>
+      <pre class="out empty" data-out="pos">esperando…</pre>
     </section>
 
-    <!-- 3. /ner -->
+    <!-- 3. /api/v1/ner -->
     <section class="route" id="route-ner">
-      <div class="desc">Reconocimiento de entidades nombradas: personas, lugares, organizaciones y fechas.</div>
-      <textarea data-text placeholder="Juan comio en Bogota">Juan comio en Bogota</textarea>
-      <div class="method-row"><button class="send" data-endpoint="ner">enviar →</button></div>
-      <div class="out-head">respuesta json<span></span></div>
+      <div class="desc">
+        Reconocimiento de entidades nombradas: <code>text</code>, <code>label</code>, <code>start</code>, <code>end</code>.<br>
+        Acepta texto único o lote. Retorna <code>results: [[{text, label, start, end}, ...], ...]</code>.
+      </div>
+      <textarea data-text placeholder="Juan viajó a Bogotá con María.">Juan viajó a Bogotá con María.</textarea>
+      <div class="method-row">
+        <button class="send" data-endpoint="ner">enviar →</button>
+      </div>
+      <div class="out-head">respuesta json</div>
       <pre class="out empty" data-out="ner">esperando…</pre>
     </section>
 
-    <!-- 4. /full -->
-    <section class="route" id="route-full">
-      <div class="desc">Pipeline individual completo: corre processed + dependency (con displaCy) + ner sobre el mismo texto.</div>
-      <textarea data-text placeholder="Juan comio pescado en Bogota">Juan comio pescado en Bogota</textarea>
-      <div class="method-row"><button class="send" data-endpoint="full">enviar →</button></div>
-      <div class="tree-preview" id="trees-full"></div>
-      <div class="out-head">respuesta json<span></span></div>
-      <pre class="out empty" data-out="full">esperando…</pre>
+    <!-- 4. /api/v1/visualize/dep -->
+    <section class="route" id="route-dep">
+      <div class="desc">
+        Visualización de dependencias sintácticas (displaCy).<br>
+        Solo acepta un único string. Retorna HTML con SVG embebido.
+      </div>
+      <textarea data-text placeholder="El caballo corre muy rápido.">El caballo corre muy rápido.</textarea>
+      <div class="method-row">
+        <button class="send" data-endpoint="dep">enviar →</button>
+      </div>
+      <div class="tree-preview" id="dep-preview"></div>
+      <div class="out-head">estado</div>
+      <pre class="out empty" data-out="dep">esperando…</pre>
     </section>
 
-    <!-- 5. /encoding -->
-    <section class="route" id="route-encoding">
-      <div class="desc">Codificación de un corpus documental contra un vocabulario de lemas limpios (one-hot | bow | tfidf).</div>
-      <div class="method-row">
-        <select id="encodingMethod">
-          <option value="tfidf" selected>tfidf</option>
-          <option value="bow">bow</option>
-          <option value="onehot">onehot</option>
-        </select>
+    <!-- 5. /api/v1/vectorize -->
+    <section class="route" id="route-vectorize">
+      <div class="desc">
+        Vectorización de corpus: vocabulario lexicográfico, One-Hot, Bag of Words y TF-IDF.<br>
+        Requiere al menos 2 documentos. Retorna <code>vocabulary, bag_of_words, one_hot, tf_idf</code>.
       </div>
-      <div class="corpus-list" id="corpusList">
+      <div class="corpus-list" id="vectorizeList">
         <input type="text" value="Mi gato, su gato y nuestro gato comen pescado">
-        <input type="text" value="Juan comio en Bogota">
-        <input type="text" value="El caballo corre muy rapido">
+        <input type="text" value="Juan comió en Bogotá">
+        <input type="text" value="El caballo corre muy rápido">
       </div>
       <div class="corpus-actions">
         <button id="addDoc">+ agregar documento</button>
         <button id="removeDoc">− quitar último</button>
       </div>
-      <div class="method-row"><button class="send" data-endpoint="encoding">enviar →</button></div>
-      <div class="out-head">respuesta json<span></span></div>
-      <pre class="out empty" data-out="encoding">esperando…</pre>
-    </section>
-
-    <!-- 6. /pipeline -->
-    <section class="route" id="route-pipeline">
-      <div class="desc"><strong>Pipeline integral paso a paso:</strong> Recibe un corpus completo y ejecuta ordenadamente todas las etapas (<code>processed</code> ➔ <code>dependency</code> con displaCy ➔ <code>ner</code> ➔ <code>full</code> ➔ <code>encoding</code> global).</div>
       <div class="method-row">
-        <select id="pipelineMethod">
-          <option value="tfidf" selected>tfidf</option>
-          <option value="bow">bow</option>
-          <option value="onehot">onehot</option>
-        </select>
+        <button class="send" data-endpoint="vectorize">enviar →</button>
       </div>
-      <div class="corpus-list" id="pipelineCorpusList">
-        <input type="text" value="Mi gato, su gato y nuestro gato comen pescado">
-        <input type="text" value="Juan comio en Bogota">
-        <input type="text" value="El caballo corre muy rapido">
-      </div>
-      <div class="corpus-actions">
-        <button id="pipelineAddDoc">+ agregar documento</button>
-        <button id="pipelineRemoveDoc">− quitar último</button>
-      </div>
-      <div class="method-row"><button class="send" data-endpoint="pipeline">ejecutar pipeline completo →</button></div>
-      <div class="step-container" id="pipeline-visual-container"></div>
-      <div class="out-head">respuesta json completa<span></span></div>
-      <pre class="out empty" data-out="pipeline">esperando…</pre>
+      <div id="vector-table-container"></div>
+      <div class="out-head">respuesta json</div>
+      <pre class="out empty" data-out="vectorize">esperando…</pre>
     </section>
 
   </main>
 
-  <script src="app.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>
