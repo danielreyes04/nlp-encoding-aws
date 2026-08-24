@@ -9,7 +9,7 @@ import os
 from typing import List
 
 # Modelo de spaCy preferido y modelo alternativo liviano (fallback)
-SPACY_MODEL: str = os.getenv("SPACY_MODEL", "es_core_news_md")
+SPACY_MODEL: str = os.getenv("SPACY_MODEL", "es_core_news_sm")
 SPACY_FALLBACK_MODEL: str = os.getenv("SPACY_FALLBACK_MODEL", "es_core_news_sm")
 
 # Metadatos generales de la API

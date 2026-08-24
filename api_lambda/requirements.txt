@@ -1,5 +1,7 @@
 fastapi==0.115.0
 mangum==0.18.0
 spacy==3.7.5
-scikit-learn==1.5.2
 pydantic==2.9.2
+
+# El modelo de spaCy se instala aparte:
+#   python -m spacy download es_core_news_sm

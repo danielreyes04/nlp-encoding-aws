@@ -1,11 +1,13 @@
 """
-API #2 - La MISMA logica (mismo app/nlp_pipeline.py) pero empaquetada
-para correr dentro de AWS Lambda, detras de API Gateway.
+api_lambda/main.py
+------------------
+API FastAPI para despliegue serverless en AWS Lambda (Mangum + Docker).
 
-Mangum convierte una app FastAPI (ASGI) en un "handler" que Lambda
-sabe invocar. Los endpoints y el flujo de datos son IDENTICOS a
-api_ec2/main.py -> por eso ambas apis siguen el mismo comportamiento,
-solo cambia como se despliegan.
+El handler de Lambda se configura como:  main.handler
+
+La lógica es idéntica a api_ec2/main.py; sólo cambia el adaptador
+de transporte (Mangum en lugar de Uvicorn) y se agrega soporte CORS
+para Lambda Function URL.
 """
 
 import sys
@@ -13,19 +15,20 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, HTTPException
-from mangum import Mangum
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from mangum import Mangum  # type: ignore
 
-from app.backend.config import API_TITLE, API_DESCRIPTION, API_VERSION
+from app.backend.config import API_TITLE, API_DESCRIPTION, API_VERSION, CORS_ORIGINS
 from app.backend.nlp_pipeline import (
-    clean_and_transform,
-    dependency_parse,
-    named_entities,
-    full_pipeline,
-    encode_corpus,
-    corpus_pipeline,
+    clean_texts,
+    pos_analysis_batch,
+    ner_analysis_batch,
+    dependency_html,
+    vectorize,
 )
-from app.backend.schemas import TextRequest, EncodingRequest
+from app.backend.schemas import TextRequest, DepRequest, VectorizeRequest
 
 app = FastAPI(
     title=f"{API_TITLE} (Lambda)",
@@ -33,48 +36,112 @@ app = FastAPI(
     version=API_VERSION,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/")
+
+# ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
+
+@app.get("/", tags=["health"])
 def health():
-    return {"status": "ok", "servicio": "Lambda"}
+    return {"status": "ok", "deployment": "Lambda"}
 
 
-@app.post("/processed")
-def processed(req: TextRequest):
-    return {"tokens": clean_and_transform(req.text)}
+# ---------------------------------------------------------------------------
+# POST /api/v1/clean
+# ---------------------------------------------------------------------------
+
+@app.post("/api/v1/clean", tags=["nlp"])
+def clean(req: TextRequest):
+    """
+    Limpieza de texto.
+
+    Convierte a minúsculas, elimina signos de puntuación (como separadores),
+    elimina stopwords (Token.is_stop de es_core_news_sm) y normaliza espacios.
+    Conserva letras acentuadas, ñ y dígitos.
+
+    Acepta texto único o lote. Siempre retorna lista de strings.
+    """
+    texts = [req.text] if isinstance(req.text, str) else req.text
+    return {"cleaned_text": clean_texts(texts)}
 
 
-@app.post("/dependency")
-def dependency(req: TextRequest):
-    return dependency_parse(req.text)
+# ---------------------------------------------------------------------------
+# POST /api/v1/pos
+# ---------------------------------------------------------------------------
+
+@app.post("/api/v1/pos", tags=["nlp"])
+def pos(req: TextRequest):
+    """
+    Análisis POS (Part-of-Speech).
+
+    Retorna tokens con text, pos (UPOS) y lemma para cada documento.
+    Acepta texto único o lote. results[i] corresponde a texts[i].
+    """
+    texts = [req.text] if isinstance(req.text, str) else req.text
+    return {"results": pos_analysis_batch(texts)}
 
 
-@app.post("/ner")
+# ---------------------------------------------------------------------------
+# POST /api/v1/ner
+# ---------------------------------------------------------------------------
+
+@app.post("/api/v1/ner", tags=["nlp"])
 def ner(req: TextRequest):
-    return {"entidades": named_entities(req.text)}
+    """
+    Reconocimiento de entidades nombradas (NER).
+
+    Detecta entidades con text, label, start (inclusivo) y end (exclusivo).
+    Acepta texto único o lote. results[i] corresponde a texts[i].
+    """
+    texts = [req.text] if isinstance(req.text, str) else req.text
+    return {"results": ner_analysis_batch(texts)}
 
 
-@app.post("/full")
-def full(req: TextRequest):
-    return full_pipeline(req.text)
+# ---------------------------------------------------------------------------
+# POST /api/v1/visualize/dep
+# ---------------------------------------------------------------------------
+
+@app.post("/api/v1/visualize/dep", response_class=HTMLResponse, tags=["nlp"])
+def visualize_dep(req: DepRequest):
+    """
+    Visualización de dependencias sintácticas.
+
+    Genera un documento HTML con el SVG de displaCy.
+    Solo acepta un único string (no batch).
+    """
+    html = dependency_html(req.text)
+    return HTMLResponse(content=html, status_code=200)
 
 
-@app.post("/encoding")
-def encoding(req: EncodingRequest):
-    try:
-        return encode_corpus(req.corpus, req.method)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+# ---------------------------------------------------------------------------
+# POST /api/v1/vectorize
+# ---------------------------------------------------------------------------
+
+@app.post("/api/v1/vectorize", tags=["nlp"])
+def vectorize_endpoint(req: VectorizeRequest):
+    """
+    Vectorización de corpus.
+
+    Construye vocabulario en orden lexicográfico y calcula:
+    - one_hot    : lista de N matrices (una por documento)
+    - bag_of_words: matriz N × |V|
+    - tf_idf     : matriz N × |V| (TF-IDF sin normalización, 4 decimales)
+
+    Requiere al menos 2 documentos.
+    """
+    return vectorize(req.documents)
 
 
-@app.post("/pipeline")
-def pipeline(req: EncodingRequest):
-    try:
-        return corpus_pipeline(req.corpus, req.method)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+# ---------------------------------------------------------------------------
+# Handler para AWS Lambda
+# ---------------------------------------------------------------------------
 
-
-# Esto es lo que AWS Lambda va a invocar en cada request
-# (se configura como "Handler" = main.handler)
-handler = Mangum(app)
+handler = Mangum(app, lifespan="off")

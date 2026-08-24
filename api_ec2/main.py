@@ -1,36 +1,33 @@
 """
-API #1 - Corre en una instancia EC2 (o dentro de Cloud9, que por debajo
-es una EC2) con uvicorn como servidor persistente.
+api_ec2/main.py
+---------------
+API FastAPI para despliegue persistente en EC2/Cloud9 con Uvicorn.
 
-Ejecutar localmente / en la instancia:
-    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+Ejecutar:
+    uvicorn api_ec2.main:app --host 0.0.0.0 --port 8000 --reload
 
-Documentacion interactiva automatica en:
-    http://<IP-publica-de-tu-instancia>:8000/docs
+Documentación interactiva:
+    http://<IP-pública>:8000/docs
 """
 
 import sys
 from pathlib import Path
 
-# Permite importar el paquete "app" (nlp_pipeline, schemas) que vive
-# un nivel arriba, compartido con api_lambda.
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 
 from app.backend.config import API_TITLE, API_DESCRIPTION, API_VERSION, CORS_ORIGINS
 from app.backend.nlp_pipeline import (
-    clean_and_transform,
-    dependency_parse,
-    named_entities,
-    full_pipeline,
-    encode_corpus,
-    corpus_pipeline,
+    clean_texts,
+    pos_analysis_batch,
+    ner_analysis_batch,
+    dependency_html,
+    vectorize,
 )
-from app.backend.schemas import TextRequest, EncodingRequest
+from app.backend.schemas import TextRequest, DepRequest, VectorizeRequest
 
 app = FastAPI(
     title=f"{API_TITLE} (EC2)",
@@ -38,7 +35,6 @@ app = FastAPI(
     version=API_VERSION,
 )
 
-# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -47,64 +43,97 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Montar archivos estáticos para la interfaz de usuario
-static_dir = Path(__file__).resolve().parent.parent / "app" / "frontend"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+# ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
 
-@app.get("/")
+@app.get("/", tags=["health"])
 def health():
-    return {"status": "ok", "servicio": "EC2/Cloud9"}
+    return {"status": "ok", "deployment": "EC2"}
 
 
-@app.get("/ui", include_in_schema=False)
-@app.get("/client", include_in_schema=False)
-def serve_client():
-    """Sirve la interfaz web del cliente."""
-    client_path = static_dir / "client.html"
-    if client_path.exists():
-        return FileResponse(str(client_path))
-    raise HTTPException(status_code=404, detail="Cliente web no encontrado")
+# ---------------------------------------------------------------------------
+# POST /api/v1/clean
+# ---------------------------------------------------------------------------
+
+@app.post("/api/v1/clean", tags=["nlp"])
+def clean(req: TextRequest):
+    """
+    Limpieza de texto.
+
+    Convierte a minúsculas, elimina signos de puntuación (como separadores),
+    elimina stopwords (Token.is_stop de es_core_news_sm) y normaliza espacios.
+    Conserva letras acentuadas, ñ y dígitos.
+
+    Acepta texto único o lote. Siempre retorna lista de strings.
+    """
+    texts = [req.text] if isinstance(req.text, str) else req.text
+    return {"cleaned_text": clean_texts(texts)}
 
 
-@app.post("/processed")
-def processed(req: TextRequest):
-    """Limpieza + transformacion + etiquetado (pasos 1-3 del flujo)."""
-    return {"tokens": clean_and_transform(req.text)}
+# ---------------------------------------------------------------------------
+# POST /api/v1/pos
+# ---------------------------------------------------------------------------
+
+@app.post("/api/v1/pos", tags=["nlp"])
+def pos(req: TextRequest):
+    """
+    Análisis POS (Part-of-Speech).
+
+    Retorna tokens con text, pos (UPOS) y lemma para cada documento.
+    Acepta texto único o lote. results[i] corresponde a texts[i].
+    """
+    texts = [req.text] if isinstance(req.text, str) else req.text
+    return {"results": pos_analysis_batch(texts)}
 
 
-@app.post("/dependency")
-def dependency(req: TextRequest):
-    """Analisis de dependencias sintacticas."""
-    return dependency_parse(req.text)
+# ---------------------------------------------------------------------------
+# POST /api/v1/ner
+# ---------------------------------------------------------------------------
 
-
-@app.post("/ner")
+@app.post("/api/v1/ner", tags=["nlp"])
 def ner(req: TextRequest):
-    """Reconocimiento de entidades nombradas."""
-    return {"entidades": named_entities(req.text)}
+    """
+    Reconocimiento de entidades nombradas (NER).
+
+    Detecta entidades con text, label, start (inclusivo) y end (exclusivo).
+    Acepta texto único o lote. results[i] corresponde a texts[i].
+    """
+    texts = [req.text] if isinstance(req.text, str) else req.text
+    return {"results": ner_analysis_batch(texts)}
 
 
-@app.post("/full")
-def full(req: TextRequest):
-    """Pipeline completo: processed + dependency + ner en un solo llamado."""
-    return full_pipeline(req.text)
+# ---------------------------------------------------------------------------
+# POST /api/v1/visualize/dep
+# ---------------------------------------------------------------------------
+
+@app.post("/api/v1/visualize/dep", response_class=HTMLResponse, tags=["nlp"])
+def visualize_dep(req: DepRequest):
+    """
+    Visualización de dependencias sintácticas.
+
+    Genera un documento HTML con el SVG de displaCy.
+    Solo acepta un único string (no batch).
+    """
+    html = dependency_html(req.text)
+    return HTMLResponse(content=html, status_code=200)
 
 
-@app.post("/encoding")
-def encoding(req: EncodingRequest):
-    """Codificacion del corpus: one-hot | bow | tfidf."""
-    try:
-        return encode_corpus(req.corpus, req.method)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+# ---------------------------------------------------------------------------
+# POST /api/v1/vectorize
+# ---------------------------------------------------------------------------
 
+@app.post("/api/v1/vectorize", tags=["nlp"])
+def vectorize_endpoint(req: VectorizeRequest):
+    """
+    Vectorización de corpus.
 
-@app.post("/pipeline")
-def pipeline(req: EncodingRequest):
-    """Pipeline integral paso a paso (processed + dependency + ner + full + encoding) sobre un corpus."""
-    try:
-        return corpus_pipeline(req.corpus, req.method)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    Construye vocabulario en orden lexicográfico y calcula:
+    - one_hot    : lista de N matrices (una por documento)
+    - bag_of_words: matriz N × |V|
+    - tf_idf     : matriz N × |V| (TF-IDF sin normalización, 4 decimales)
+
+    Requiere al menos 2 documentos.
+    """
+    return vectorize(req.documents)

@@ -1,287 +1,273 @@
 """
 nlp_pipeline.py
 ----------------
-Este modulo contiene TODA la logica de negocio (el "core") que sigue
-el flujo visto en clase:
+Núcleo de lógica NLP compartido por ambas APIs (EC2 y Lambda).
 
-    Corpus -> Limpieza -> Transformacion -> Etiquetado -> Codificacion
+Flujo de procesamiento:
+    Corpus -> Limpieza -> POS/Lematización -> NER -> Dependencias -> Vectorización
 
-Las DOS apis (la que corre en EC2/Cloud9 y la que corre en Lambda)
-importan este mismo modulo. Asi garantizamos que ambas sigan
-exactamente el mismo flujo de datos: el modulo es la "fuente de
-verdad" y las apis solo son capas delgadas (endpoints HTTP) encima.
-
-Requiere: spacy + el modelo es_core_news_sm (o es_core_news_md/lg
-si quieres mas precision, a costa de mas peso).
+Todos los resultados cumplen el contrato definido en la guía del laboratorio
+(sección 8 – Perfil mínimo de interoperabilidad del evaluador).
 """
 
 from __future__ import annotations
 
+import math
+import re
+from collections import Counter
+from functools import lru_cache
+
 import spacy
 from spacy import displacy
-import logging
-from functools import lru_cache
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 
 from app.backend.config import SPACY_MODEL, SPACY_FALLBACK_MODEL
 
+import logging
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # 1. Carga del modelo (una sola vez, cacheado)
-# ---------------------------------------------------------------------
-# lru_cache evita recargar el modelo en cada request. En Lambda esto
-# tambien ayuda: si el contenedor se reutiliza ("warm start"), el
-# modelo ya esta en memoria y la siguiente invocacion es rapida.
+# ---------------------------------------------------------------------------
 
 @lru_cache(maxsize=1)
-def get_nlp(model_name: str | None = None) -> spacy.language.Language:
-    """Carga el modelo de spaCy con cache LRU y fallback automático."""
-    selected = model_name or SPACY_MODEL
+def get_nlp() -> spacy.language.Language:
+    """Carga el modelo spaCy con caché LRU y fallback automático."""
     try:
-        return spacy.load(selected)
+        return spacy.load(SPACY_MODEL)
     except OSError:
         logger.warning(
-            "Modelo '%s' no disponible localmente. Cargando fallback '%s'.",
-            selected,
+            "Modelo '%s' no disponible. Cargando fallback '%s'.",
+            SPACY_MODEL,
             SPACY_FALLBACK_MODEL,
         )
         return spacy.load(SPACY_FALLBACK_MODEL)
 
 
-# ---------------------------------------------------------------------
-# 2. Limpieza + Transformacion + Etiquetado (pasos 1, 2 y 3 del apunte)
-# ---------------------------------------------------------------------
-def clean_and_transform(text: str) -> list[dict]:
-    """
-    Paso 1 (Limpieza): elimina stopwords y puntuacion.
-    Paso 2 (Transformacion): pasa todo a minuscula y lematiza
-        (convierte verbo conjugado -> verbo en infinitivo/normal).
-    Paso 3 (Etiquetado): le pone a cada token su etiqueta POS
-        (Noun, Verb, Adv, etc.), igual que en tus apuntes.
+# ---------------------------------------------------------------------------
+# 2. Limpieza de texto  →  POST /api/v1/clean
+# ---------------------------------------------------------------------------
 
-    Devuelve una lista de tokens "limpios" con su lema y su POS,
-    en el mismo orden en que aparecen en el texto.
+def clean_text(text: str) -> str:
+    """
+    Limpia un único documento:
+    - Convierte a minúsculas.
+    - Reemplaza signos de puntuación por espacios (actúan como separadores,
+      no concatenan términos).
+    - Elimina stopwords (Token.is_stop según es_core_news_sm/md).
+    - Conserva letras acentuadas, ñ y dígitos.
+    - Normaliza espacios en blanco.
+
+    Retorna el texto limpio como string.
     """
     nlp = get_nlp()
-    
-    # nlp es un objeto que viene de la libreria de Spacy
-    # se encarga de recibir el texto en plano para realizar un analisisi de nlp
-    doc = nlp(text)
+    # Reemplazar signos de puntuación por espacios antes de procesar,
+    # para que no concatenen términos adyacentes.
+    text_pre = re.sub(r'[^\w\s]', ' ', text, flags=re.UNICODE)
+    doc = nlp(text_pre.lower())
 
     tokens = []
     for tok in doc:
-        if tok.is_stop or tok.is_punct or tok.is_space:
-            # Elimina el ruido al momento de tokenizar
-            # elimina los stopwords (el, lo, las, etc..) conectores
-            # elimina signis de puntuacion
-            # elimina espacios en blanco, saltos de linea, etc..
+        # Saltar stopwords, espacios y tokens vacíos
+        if tok.is_stop or tok.is_space or not tok.text.strip():
             continue
-    
-        tokens.append(
-            {
-                "texto_original": tok.text,
-                "lema": tok.lemma_.lower(), # corriendo --> correr
-                "pos": tok.pos_,       # NOUN, VERB, ADJ, ADV, PROPN...
-                "pos_detalle": tok.tag_, # Guarda la etiqueta gramatical detallada dependiente del idioma (codigo tecnico)
-            }
-            #hace el append del dic a la lista tokens
-        )
-    return tokens
+        # Conservar sólo el texto (ya en minúsculas)
+        tokens.append(tok.text)
+
+    return ' '.join(tokens)
 
 
-def lemmas_only(text: str) -> list[str]:
-    """Devuelve solo la lista de lemas limpios (lo que usamos para
-    construir el vocabulario en la etapa de codificacion)."""
-    
-    # Recorre el diccionario de la funcion clean_and_transform pero solo de la clave [lema] y crea una una lista extrayendo esos valores
-    # t trae un diccionario
-    return [t["lema"] for t in clean_and_transform(text)]
-    
+def clean_texts(texts: list[str]) -> list[str]:
+    """Aplica clean_text a una lista de documentos y conserva el orden."""
+    return [clean_text(t) for t in texts]
 
 
-# ---------------------------------------------------------------------
-# 3. Dependencias sintacticas (endpoint /dependency)
-# ---------------------------------------------------------------------
-def dependency_parse(text: str) -> dict:
+# ---------------------------------------------------------------------------
+# 3. Análisis POS  →  POST /api/v1/pos
+# ---------------------------------------------------------------------------
+
+def pos_analysis(text: str) -> list[dict]:
     """
-    Analisis de dependencias: para cada token dice de que palabra
-    depende sintacticamente y con que relacion (sujeto, objeto, etc).
-    Ademas, utiliza el modulo displacy de spaCy para generar el arbol visual
-    de dependencias (en formato SVG) para cada oracion.
+    Retorna, en orden, la lista de tokens del documento con:
+      - text : texto original del token
+      - pos  : categoría gramatical universal (UPOS)
+      - lemma: lema en minúsculas
+    Incluye todos los tokens (sin filtrar stopwords ni puntuación)
+    para conservar el orden y la correspondencia con el texto original.
     """
     nlp = get_nlp()
     doc = nlp(text)
-
-    tokens = [
+    return [
         {
-            "texto": tok.text,
-            "lema": tok.lemma_.lower(),
-            "dependencia": tok.dep_,      # nsubj, obj, root, etc.
-            "cabeza": tok.head.text,      # palabra de la que depende
+            "text": tok.text,
             "pos": tok.pos_,
+            "lemma": tok.lemma_.lower(),
         }
         for tok in doc
         if not tok.is_space
     ]
 
-    arboles = [
-        {
-            "oracion": sent.text.strip(),
-            "svg": displacy.render(sent, style="dep", jupyter=False),
-        }
-        for sent in doc.sents
-        if sent.text.strip()
-    ]
 
-    return {
-        "dependencias": tokens,
-        "arboles": arboles,
-    }
+def pos_analysis_batch(texts: list[str]) -> list[list[dict]]:
+    """Aplica pos_analysis a una lista de documentos y conserva el orden."""
+    return [pos_analysis(t) for t in texts]
 
 
-# ---------------------------------------------------------------------
-# 4. Entidades nombradas (endpoint /ner)
-# ---------------------------------------------------------------------
-def named_entities(text: str) -> list[dict]:
+# ---------------------------------------------------------------------------
+# 4. Reconocimiento de entidades (NER)  →  POST /api/v1/ner
+# ---------------------------------------------------------------------------
+
+def ner_analysis(text: str) -> list[dict]:
     """
-    Reconocimiento de entidades nombradas: personas, lugares,
-    organizaciones, fechas, etc. (p.ej. "Juan" -> PER, "Bogota" -> LOC,
-    como en el ejemplo de tus apuntes).
+    Detecta entidades nombradas en un documento.
+    Retorna lista de dicts con:
+      - text : texto de la entidad
+      - label: tipo de entidad (PER, LOC, ORG, …)
+      - start: índice de carácter inicial (inclusivo) en el texto original
+      - end  : índice de carácter final (exclusivo) en el texto original
     """
     nlp = get_nlp()
     doc = nlp(text)
-
     return [
         {
-            "texto": ent.text,
-            "etiqueta": ent.label_,
-            "inicio_caracter": ent.start_char,
-            "fin_caracter": ent.end_char,
+            "text": ent.text,
+            "label": ent.label_,
+            "start": ent.start_char,
+            "end": ent.end_char,
         }
         for ent in doc.ents
     ]
 
 
-# ---------------------------------------------------------------------
-# 5. Pipeline completo (endpoint /full)
-# ---------------------------------------------------------------------
-def full_pipeline(text: str) -> dict:
-    """Corre limpieza+transformacion+etiquetado, dependencias y NER
-    sobre el mismo texto y devuelve todo junto."""
-    return {
-        "texto_original": text,
-        "tokens_procesados": clean_and_transform(text),
-        "dependencias": dependency_parse(text),
-        "entidades": named_entities(text),
+def ner_analysis_batch(texts: list[str]) -> list[list[dict]]:
+    """Aplica ner_analysis a una lista de documentos y conserva el orden."""
+    return [ner_analysis(t) for t in texts]
+
+
+# ---------------------------------------------------------------------------
+# 5. Visualización de dependencias  →  POST /api/v1/visualize/dep
+# ---------------------------------------------------------------------------
+
+def dependency_html(text: str) -> str:
+    """
+    Genera un documento HTML completo que contiene el SVG de displaCy
+    con el árbol de dependencias sintácticas del texto.
+    Solo procesa un único documento por llamada.
+    """
+    nlp = get_nlp()
+    doc = nlp(text)
+    svg = displacy.render(doc, style="dep", jupyter=False, page=False)
+    html = (
+        "<!DOCTYPE html>"
+        "<html><head><meta charset='utf-8'>"
+        "<title>Dependency Parse</title></head>"
+        f"<body>{svg}</body></html>"
+    )
+    return html
+
+
+# ---------------------------------------------------------------------------
+# 6. Vectorización  →  POST /api/v1/vectorize
+# ---------------------------------------------------------------------------
+
+def _lemmatize_for_vocab(text: str) -> list[str]:
+    """
+    Aplica la misma limpieza que clean_text pero retorna la lista de
+    lemas (en minúsculas) que se usarán para construir el vocabulario.
+    """
+    nlp = get_nlp()
+    text_pre = re.sub(r'[^\w\s]', ' ', text, flags=re.UNICODE)
+    doc = nlp(text_pre.lower())
+    return [
+        tok.lemma_.lower()
+        for tok in doc
+        if not tok.is_stop and not tok.is_space and tok.text.strip()
+    ]
+
+
+def vectorize(documents: list[str]) -> dict:
+    """
+    Construye vocabulario y calcula One-Hot, Bag of Words y TF-IDF
+    para una colección de al menos 2 documentos.
+
+    Reglas (sección 4 de la guía):
+    ─────────────────────────────
+    • Vocabulario: lemas de la limpieza, en orden lexicográfico ascendente.
+    • BoW: frecuencia absoluta del término en el documento.
+    • One-Hot: por cada *ocurrencia* de un término se genera un vector
+      binario de longitud |V| con un único 1 en la posición del término.
+      → cada documento produce una matriz de shape (freq_total × |V|).
+    • TF-IDF:
+        tf(t, d)  = frecuencia absoluta de t en d
+        idf(t)    = ln( (|D| + 1) / (nt + 1) ) + 1
+        tfidf     = tf * idf, redondeado a 4 decimales.
+        Sin normalización posterior.
+
+    Retorna:
+    {
+      "vocabulary": [...],
+      "bag_of_words": [[...], ...],          # N × |V|
+      "one_hot": [[[...], ...], ...],        # lista de N matrices
+      "tf_idf": [[...], ...]                 # N × |V|
+    }
+    """
+    D = len(documents)  # número de documentos
+
+    # 1. Lematizar cada documento → lista de lemas limpios por doc
+    docs_lemmas: list[list[str]] = [_lemmatize_for_vocab(doc) for doc in documents]
+
+    # 2. Construir vocabulario en orden lexicográfico
+    vocab_set: set[str] = set()
+    for lemmas in docs_lemmas:
+        vocab_set.update(lemmas)
+    vocabulary: list[str] = sorted(vocab_set)
+    V = len(vocabulary)
+    term_index: dict[str, int] = {term: i for i, term in enumerate(vocabulary)}
+
+    # 3. Frecuencias absolutas por documento (para BoW y TF-IDF)
+    doc_freqs: list[Counter] = [Counter(lemmas) for lemmas in docs_lemmas]
+
+    # 4. nt: número de documentos que contienen cada término
+    nt: dict[str, int] = {}
+    for term in vocabulary:
+        nt[term] = sum(1 for freq in doc_freqs if freq[term] > 0)
+
+    # 5. idf por término: ln((|D|+1)/(nt+1)) + 1
+    idf: dict[str, float] = {
+        term: math.log((D + 1) / (nt[term] + 1)) + 1
+        for term in vocabulary
     }
 
+    # 6. Bag of Words  →  N × |V|
+    bag_of_words: list[list[int]] = []
+    for freq in doc_freqs:
+        row = [freq[term] for term in vocabulary]
+        bag_of_words.append(row)
 
-# ---------------------------------------------------------------------
-# 6. Codificacion: One-Hot / Bag of Words / TF-IDF (endpoint /encoding)
-# ---------------------------------------------------------------------
-def encode_corpus(corpus: list[str], method: str = "tfidf") -> dict:
-    """
-    Replica exactamente el ejemplo de tus apuntes:
+    # 7. One-Hot  →  lista de N matrices (freq_total_i × |V|)
+    #    Cada fila representa UNA ocurrencia (aparición) del token en el doc.
+    one_hot: list[list[list[int]]] = []
+    for lemmas in docs_lemmas:
+        matrix: list[list[int]] = []
+        for lemma in lemmas:
+            if lemma in term_index:
+                vec = [0] * V
+                vec[term_index[lemma]] = 1
+                matrix.append(vec)
+        one_hot.append(matrix)
 
-        D = {d1, d2, d3}  -> corpus
-        1) limpieza + transformacion + etiquetado  (clean_and_transform)
-        2) se define el vocabulario a partir de los lemas limpios
-        3) se codifica cada documento contra ese vocabulario con:
-             - one-hot   -> presencia/ausencia (0/1)
-             - bow       -> frecuencia absoluta
-             - tfidf     -> importancia relativa (formula de sklearn,
-                             la misma que anotaste: log((1+n)/(1+df))+1)
-
-    method: "onehot" | "bow" | "tfidf"
-    """
-    method = method.lower()
-    if method not in {"onehot", "bow", "tfidf"}:
-        raise ValueError("method debe ser 'onehot', 'bow' o 'tfidf'")
-
-    # Paso 1-3: limpiamos y lematizamos cada documento del corpus,
-    # y lo volvemos a unir en texto para que el Vectorizer de sklearn
-    # tokenice sobre nuestros LEMAS limpios (no sobre el texto crudo).
-    docs_lemmatizados = [" ".join(lemmas_only(doc)) for doc in corpus]
-
-    if method == "bow":
-        vectorizer = CountVectorizer()
-    elif method == "onehot":
-        vectorizer = CountVectorizer(binary=True)
-    else:  # tfidf
-        # norm=None para que el valor se vea igual de "crudo" que en
-        # el calculo manual de tus apuntes (tf * idf), sin normalizar
-        # el vector completo a longitud 1.
-        vectorizer = TfidfVectorizer(norm=None, smooth_idf=True)
-
-    matrix = vectorizer.fit_transform(docs_lemmatizados)
-    vocabulario = vectorizer.get_feature_names_out().tolist()
+    # 8. TF-IDF  →  N × |V|
+    tf_idf: list[list[float]] = []
+    for freq in doc_freqs:
+        row = [
+            round(freq[term] * idf[term], 4)
+            for term in vocabulary
+        ]
+        tf_idf.append(row)
 
     return {
-        "metodo": method,
-        "vocabulario": vocabulario,
-        "documentos": [
-            {
-                "documento_original": corpus[i],
-                "tokens_usados": docs_lemmatizados[i].split(),
-                "vector": matrix[i].toarray()[0].round(4).tolist(),
-            }
-            for i in range(len(corpus))
-        ],
-    }
-
-
-# ---------------------------------------------------------------------
-# 7. Pipeline completo paso a paso sobre un corpus (endpoint /pipeline)
-# ---------------------------------------------------------------------
-def corpus_pipeline(corpus: list[str], method: str = "tfidf") -> dict:
-    """
-    Ejecuta todo el flujo NLP paso a paso sobre un corpus de documentos:
-      Paso 1: Limpieza, transformacion y etiquetado POS (processed).
-      Paso 2: Analisis de dependencias sintacticas con arboles visuales spaCy displaCy (dependency).
-      Paso 3: Reconocimiento de entidades nombradas (ner).
-      Paso 4: Resumen integrado full por cada documento (full).
-      Paso 5: Codificacion global del corpus: construccion de vocabulario
-              y vectorizacion segun el metodo (onehot, bow, tfidf) (encoding).
-    """
-    method = method.lower()
-    if method not in {"onehot", "bow", "tfidf"}:
-        raise ValueError("method debe ser 'onehot', 'bow' o 'tfidf'")
-
-    documentos_paso_a_paso = []
-    for i, doc_text in enumerate(corpus):
-        tokens_proc = clean_and_transform(doc_text)
-        lemas = lemmas_only(doc_text)
-        dep_data = dependency_parse(doc_text)
-        ner_data = named_entities(doc_text)
-
-        documentos_paso_a_paso.append({
-            "id": i + 1,
-            "documento_original": doc_text,
-            "paso_1_processed": {
-                "tokens_limpios": tokens_proc,
-                "lemas": lemas,
-            },
-            "paso_2_dependency": dep_data,
-            "paso_3_ner": {
-                "entidades": ner_data,
-            },
-            "paso_4_full": {
-                "texto_original": doc_text,
-                "tokens_procesados": tokens_proc,
-                "dependencias": dep_data,
-                "entidades": ner_data,
-            },
-        })
-
-    encoding_data = encode_corpus(corpus, method)
-
-    return {
-        "resumen": {
-            "total_documentos": len(corpus),
-            "metodo_codificacion": method,
-            "tamano_vocabulario": len(encoding_data["vocabulario"]),
-        },
-        "paso_a_paso_documentos": documentos_paso_a_paso,
-        "paso_5_encoding_corpus": encoding_data,
+        "vocabulary": vocabulary,
+        "bag_of_words": bag_of_words,
+        "one_hot": one_hot,
+        "tf_idf": tf_idf,
     }
