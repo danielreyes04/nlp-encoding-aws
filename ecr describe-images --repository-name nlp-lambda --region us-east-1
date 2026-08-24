@@ -1,0 +1,38 @@
+{
+    "imageDetails": [
+        {
+            "registryId": "492606007513",
+            "repositoryName": "nlp-lambda",
+            "imageDigest": "sha256:238d375d41994af5b7da926b75db311715255759acc6d7a942b4e34bb2756c86",
+            "imageSizeInBytes": 1549,
+            "imagePushedAt": "2026-08-24T03:17:05.377000+00:00",
+            "imageManifestMediaType": "application/vnd.oci.image.manifest.v1+json",
+            "artifactMediaType": "application/vnd.docker.attestation.manifest.v1+json",
+            "subjectManifestDigest": "sha256:34cce928a92d835dc6ee95c828362dc58cc45901573bfa8088e0b3756b60871f",
+            "imageStatus": "ACTIVE"
+        },
+        {
+            "registryId": "492606007513",
+            "repositoryName": "nlp-lambda",
+            "imageDigest": "sha256:0b14b571a940e9f5fc1a8efc650f8c5e74216e6a08193bbe07b459b3cd05cd7f",
+            "imageSizeInBytes": 273653872,
+            "imagePushedAt": "2026-08-24T03:17:05.604000+00:00",
+            "imageManifestMediaType": "application/vnd.oci.image.index.v1+json",
+            "lastRecordedPullTime": "2026-08-24T03:19:49.582000+00:00",
+            "imageStatus": "ACTIVE"
+        },
+        {
+            "registryId": "492606007513",
+            "repositoryName": "nlp-lambda",
+            "imageDigest": "sha256:34cce928a92d835dc6ee95c828362dc58cc45901573bfa8088e0b3756b60871f",
+            "imageTags": [
+                "latest"
+            ],
+            "imageSizeInBytes": 273653872,
+            "imagePushedAt": "2026-08-24T03:17:05.375000+00:00",
+            "imageManifestMediaType": "application/vnd.oci.image.manifest.v1+json",
+            "artifactMediaType": "application/vnd.oci.image.config.v1+json",
+            "imageStatus": "ACTIVE"
+        }
+    ]
+}

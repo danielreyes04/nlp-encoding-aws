@@ -5,3 +5,4 @@ pydantic==2.9.2
 
 # El modelo de spaCy se instala aparte:
 #   python -m spacy download es_core_news_sm
+click>=8.1.0
