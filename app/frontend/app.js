@@ -3,7 +3,8 @@
  *
  * Flujo:
  *  1. Usuario edita corpus y pulsa "Procesar corpus".
- *  2. Se llaman los 5 endpoints en EC2 y Lambda simultáneamente.
+ *  2. Se llaman los 5 endpoints en EC2 y Lambda simultáneamente con
+ *     Promise.allSettled — si uno falla el otro sigue mostrándose.
  *  3. Resultados se guardan en state.ec2 y state.lambda.
  *  4. Las pestañas muestran ambas respuestas lado a lado.
  *     Cambiar de doc-tab es instantáneo (sin fetch extra).
@@ -28,25 +29,16 @@ function getCorpus() {
 async function pingHealth() {
   const dot = document.getElementById('statusDot');
   const txt = document.getElementById('statusTxt');
-  try {
-    const [r1, r2] = await Promise.allSettled([
-      fetch(`${getEc2Url()}/`),
-      fetch(`${getLambdaUrl()}/`),
-    ]);
-    const okEc2    = r1.status === 'fulfilled' && r1.value.ok;
-    const okLambda = r2.status === 'fulfilled' && r2.value.ok;
-    if (okEc2 && okLambda) {
-      dot.className = 'dot ok'; txt.textContent = 'EC2 ✓  Lambda ✓';
-    } else if (okEc2) {
-      dot.className = 'dot bad'; txt.textContent = 'EC2 ✓  Lambda ✗';
-    } else if (okLambda) {
-      dot.className = 'dot bad'; txt.textContent = 'EC2 ✗  Lambda ✓';
-    } else {
-      dot.className = 'dot bad'; txt.textContent = 'sin conexión';
-    }
-  } catch {
-    dot.className = 'dot bad'; txt.textContent = 'sin conexión';
-  }
+  const [r1, r2] = await Promise.allSettled([
+    fetch(`${getEc2Url()}/`).then(r => r.ok),
+    fetch(`${getLambdaUrl()}/`).then(r => r.ok),
+  ]);
+  const okEc2    = r1.status === 'fulfilled' && r1.value;
+  const okLambda = r2.status === 'fulfilled' && r2.value;
+  if (okEc2 && okLambda)      { dot.className = 'dot ok';  txt.textContent = 'EC2 ✓  Lambda ✓'; }
+  else if (okEc2)             { dot.className = 'dot bad'; txt.textContent = 'EC2 ✓  Lambda ✗'; }
+  else if (okLambda)          { dot.className = 'dot bad'; txt.textContent = 'EC2 ✗  Lambda ✓'; }
+  else                        { dot.className = 'dot bad'; txt.textContent = 'sin conexión'; }
 }
 
 // ─── Tabs de sección ──────────────────────────────────────────────────────────
@@ -77,18 +69,21 @@ function buildDocTabs(containerEl, count, onSelect) {
     containerEl.appendChild(btn);
     btns.push(btn);
   }
-  // Devuelve función para activar un índice externamente
-  return (idx) => { btns.forEach(b => b.classList.remove('active')); btns[idx]?.classList.add('active'); onSelect(idx); };
+  return (idx) => {
+    btns.forEach(b => b.classList.remove('active'));
+    btns[idx]?.classList.add('active');
+    onSelect(idx);
+  };
 }
 
 // ─── Renderizadores ───────────────────────────────────────────────────────────
 function renderClean() {
   const n = state.corpus.length;
   const select = buildDocTabs(document.getElementById('clean-doc-tabs'), n, (i) => {
-    const ec2v    = state.ec2.clean?.cleaned_text?.[i] ?? '—';
-    const lambdav = state.lambda.clean?.cleaned_text?.[i] ?? '—';
-    setOut('clean-out-ec2',    JSON.stringify({ doc: i+1, cleaned_text: ec2v }, null, 2));
-    setOut('clean-out-lambda', JSON.stringify({ doc: i+1, cleaned_text: lambdav }, null, 2));
+    const ev = state.ec2.clean?.cleaned_text?.[i] ?? null;
+    const lv = state.lambda.clean?.cleaned_text?.[i] ?? null;
+    setOut('clean-out-ec2',    ev !== null ? JSON.stringify({ doc: i+1, cleaned_text: ev }, null, 2) : '(sin respuesta)');
+    setOut('clean-out-lambda', lv !== null ? JSON.stringify({ doc: i+1, cleaned_text: lv }, null, 2) : '(sin respuesta)');
   });
   select(0);
 }
@@ -96,8 +91,10 @@ function renderClean() {
 function renderPos() {
   const n = state.corpus.length;
   const select = buildDocTabs(document.getElementById('pos-doc-tabs'), n, (i) => {
-    setOut('pos-out-ec2',    JSON.stringify({ doc: i+1, tokens: state.ec2.pos?.results?.[i] ?? [] }, null, 2));
-    setOut('pos-out-lambda', JSON.stringify({ doc: i+1, tokens: state.lambda.pos?.results?.[i] ?? [] }, null, 2));
+    const ev = state.ec2.pos?.results?.[i] ?? null;
+    const lv = state.lambda.pos?.results?.[i] ?? null;
+    setOut('pos-out-ec2',    ev ? JSON.stringify({ doc: i+1, tokens: ev }, null, 2) : '(sin respuesta)');
+    setOut('pos-out-lambda', lv ? JSON.stringify({ doc: i+1, tokens: lv }, null, 2) : '(sin respuesta)');
   });
   select(0);
 }
@@ -105,8 +102,10 @@ function renderPos() {
 function renderNer() {
   const n = state.corpus.length;
   const select = buildDocTabs(document.getElementById('ner-doc-tabs'), n, (i) => {
-    setOut('ner-out-ec2',    JSON.stringify({ doc: i+1, entities: state.ec2.ner?.results?.[i] ?? [] }, null, 2));
-    setOut('ner-out-lambda', JSON.stringify({ doc: i+1, entities: state.lambda.ner?.results?.[i] ?? [] }, null, 2));
+    const ev = state.ec2.ner?.results?.[i] ?? null;
+    const lv = state.lambda.ner?.results?.[i] ?? null;
+    setOut('ner-out-ec2',    ev !== null ? JSON.stringify({ doc: i+1, entities: ev }, null, 2) : '(sin respuesta)');
+    setOut('ner-out-lambda', lv !== null ? JSON.stringify({ doc: i+1, entities: lv }, null, 2) : '(sin respuesta)');
   });
   select(0);
 }
@@ -114,25 +113,29 @@ function renderNer() {
 function renderDep() {
   const n = state.corpus.length;
   const select = buildDocTabs(document.getElementById('dep-doc-tabs'), n, (i) => {
-    const previewEc2    = document.getElementById('dep-preview-ec2');
-    const previewLambda = document.getElementById('dep-preview-lambda');
-    previewEc2.innerHTML    = state.ec2.dep[i]    ?? '<div class="empty-hint">sin datos</div>';
-    previewLambda.innerHTML = state.lambda.dep[i] ?? '<div class="empty-hint">sin datos</div>';
+    document.getElementById('dep-preview-ec2').innerHTML =
+      state.ec2.dep[i]    ?? '<div class="empty-hint">sin respuesta de EC2</div>';
+    document.getElementById('dep-preview-lambda').innerHTML =
+      state.lambda.dep[i] ?? '<div class="empty-hint">sin respuesta de Lambda</div>';
   });
   select(0);
 }
 
 function renderVectorize() {
-  setOut('vectorize-out-ec2',    JSON.stringify(state.ec2.vectorize,    null, 2));
-  setOut('vectorize-out-lambda', JSON.stringify(state.lambda.vectorize, null, 2));
-  buildVectorTable('vector-table-ec2',    state.ec2.vectorize);
-  buildVectorTable('vector-table-lambda', state.lambda.vectorize);
+  const ev = state.ec2.vectorize;
+  const lv = state.lambda.vectorize;
+  setOut('vectorize-out-ec2',    ev ? JSON.stringify(ev, null, 2) : '(sin respuesta)');
+  setOut('vectorize-out-lambda', lv ? JSON.stringify(lv, null, 2) : '(sin respuesta)');
+  buildVectorTable('vector-table-ec2',    ev);
+  buildVectorTable('vector-table-lambda', lv);
 }
 
 function buildVectorTable(containerId, data) {
   const el = document.getElementById(containerId);
-  if (!data?.vocabulary?.length) { el.innerHTML = '<div class="empty-hint">sin datos</div>'; return; }
-
+  if (!data?.vocabulary?.length) {
+    el.innerHTML = '<div class="empty-hint">sin datos</div>';
+    return;
+  }
   const { vocabulary, bag_of_words, tf_idf } = data;
   const makeTable = (title, rows) => {
     const ths = vocabulary.map(v => `<th>${v}</th>`).join('');
@@ -158,21 +161,27 @@ function setOut(id, text) {
   el.textContent = text;
 }
 
-// ─── Fetch helpers ────────────────────────────────────────────────────────────
-function jsonPost(url, body) {
-  return fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }).then(r => r.json()).catch(() => null);
+// ─── Fetch helpers (nunca lanzan excepción) ───────────────────────────────────
+async function safeJsonPost(url, body) {
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return r.ok ? r.json() : null;
+  } catch { return null; }
 }
 
-function htmlPost(url, body) {
-  return fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }).then(r => r.text()).catch(() => null);
+async function safeHtmlPost(url, body) {
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return r.ok ? r.text() : null;
+  } catch { return null; }
 }
 
 // ─── Procesamiento principal ──────────────────────────────────────────────────
@@ -188,61 +197,57 @@ async function processCorpus() {
 
   state.corpus = corpus;
   const ec2    = getEc2Url();
-  const lambda = getLambdaUrl();
+  const lam    = getLambdaUrl();
 
-  // Construir todas las peticiones: 4 batch + N dep por entorno = 2*(4+N) total
-  const depEc2    = corpus.map(text => htmlPost(`${ec2}/api/v1/visualize/dep`,    { text }));
-  const depLambda = corpus.map(text => htmlPost(`${lambda}/api/v1/visualize/dep`, { text }));
+  // Todas las peticiones en paralelo. safe* nunca lanzan excepción.
+  const [
+    ec2Clean, ec2Pos, ec2Ner, ec2Vec,
+    lClean,   lPos,   lNer,   lVec,
+    ...depAll
+  ] = await Promise.all([
+    // EC2 — batch
+    safeJsonPost(`${ec2}/api/v1/clean`,     { text: corpus }),
+    safeJsonPost(`${ec2}/api/v1/pos`,       { text: corpus }),
+    safeJsonPost(`${ec2}/api/v1/ner`,       { text: corpus }),
+    safeJsonPost(`${ec2}/api/v1/vectorize`, { documents: corpus }),
+    // Lambda — batch
+    safeJsonPost(`${lam}/api/v1/clean`,     { text: corpus }),
+    safeJsonPost(`${lam}/api/v1/pos`,       { text: corpus }),
+    safeJsonPost(`${lam}/api/v1/ner`,       { text: corpus }),
+    safeJsonPost(`${lam}/api/v1/vectorize`, { documents: corpus }),
+    // dep: N peticiones EC2 + N peticiones Lambda
+    ...corpus.map(text => safeHtmlPost(`${ec2}/api/v1/visualize/dep`, { text })),
+    ...corpus.map(text => safeHtmlPost(`${lam}/api/v1/visualize/dep`, { text })),
+  ]);
 
-  try {
-    const results = await Promise.all([
-      // EC2
-      jsonPost(`${ec2}/api/v1/clean`,     { text: corpus }),
-      jsonPost(`${ec2}/api/v1/pos`,       { text: corpus }),
-      jsonPost(`${ec2}/api/v1/ner`,       { text: corpus }),
-      jsonPost(`${ec2}/api/v1/vectorize`, { documents: corpus }),
-      // Lambda
-      jsonPost(`${lambda}/api/v1/clean`,     { text: corpus }),
-      jsonPost(`${lambda}/api/v1/pos`,       { text: corpus }),
-      jsonPost(`${lambda}/api/v1/ner`,       { text: corpus }),
-      jsonPost(`${lambda}/api/v1/vectorize`, { documents: corpus }),
-      // dep EC2 + Lambda (N peticiones cada uno)
-      ...depEc2,
-      ...depLambda,
-    ]);
+  state.ec2.clean     = ec2Clean;
+  state.ec2.pos       = ec2Pos;
+  state.ec2.ner       = ec2Ner;
+  state.ec2.vectorize = ec2Vec;
+  state.ec2.dep       = depAll.slice(0, corpus.length);
 
-    const [
-      ec2Clean, ec2Pos, ec2Ner, ec2Vec,
-      lClean,   lPos,   lNer,   lVec,
-      ...depResults
-    ] = results;
+  state.lambda.clean     = lClean;
+  state.lambda.pos       = lPos;
+  state.lambda.ner       = lNer;
+  state.lambda.vectorize = lVec;
+  state.lambda.dep       = depAll.slice(corpus.length);
 
-    state.ec2.clean     = ec2Clean;
-    state.ec2.pos       = ec2Pos;
-    state.ec2.ner       = ec2Ner;
-    state.ec2.vectorize = ec2Vec;
-    state.ec2.dep       = depResults.slice(0, corpus.length);
+  renderClean();
+  renderPos();
+  renderNer();
+  renderDep();
+  renderVectorize();
 
-    state.lambda.clean     = lClean;
-    state.lambda.pos       = lPos;
-    state.lambda.ner       = lNer;
-    state.lambda.vectorize = lVec;
-    state.lambda.dep       = depResults.slice(corpus.length);
+  const okEc2    = !!(ec2Clean || ec2Pos || ec2Ner || ec2Vec);
+  const okLambda = !!(lClean   || lPos   || lNer   || lVec);
+  const label    = okEc2 && okLambda ? 'EC2 ✓  Lambda ✓'
+                 : okEc2             ? 'EC2 ✓  Lambda ✗ (timeout o error)'
+                 : okLambda          ? 'EC2 ✗  Lambda ✓'
+                 :                    'EC2 ✗  Lambda ✗';
 
-    renderClean();
-    renderPos();
-    renderNer();
-    renderDep();
-    renderVectorize();
-
-    status.textContent = `✓ ${corpus.length} doc${corpus.length > 1 ? 's' : ''} — EC2 y Lambda`;
-    status.className   = 'process-status ok';
-  } catch (e) {
-    status.textContent = `✗ ${e.message}`;
-    status.className   = 'process-status error';
-  } finally {
-    btn.disabled = false;
-  }
+  status.textContent = `✓ ${corpus.length} doc${corpus.length > 1 ? 's' : ''} — ${label}`;
+  status.className   = (okEc2 && okLambda) ? 'process-status ok' : 'process-status running';
+  btn.disabled = false;
 }
 
 // ─── Corpus dinámico ──────────────────────────────────────────────────────────
@@ -263,7 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   setupSharedCorpus();
   pingHealth();
-
   document.getElementById('ec2Url').addEventListener('change', pingHealth);
   document.getElementById('lambdaUrl').addEventListener('change', pingHealth);
   document.getElementById('processBtn').addEventListener('click', processCorpus);
