@@ -115,8 +115,8 @@ Para correr la API con recarga automática:
 uvicorn api_ec2.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-- **Documentación Swagger interactiva:** [http://ec2-34-192-45-54.compute-1.amazonaws.com:8000/docs](http://ec2-34-192-45-54.compute-1.amazonaws.com:8000/docs)
-- **Cliente Web Integrado:** [https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws/docs](https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws/docs) o [http://localhost:8000/ui](https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws/docs)
+- **Documentación API EC2:** [http://ec2-34-192-45-54.compute-1.amazonaws.com:8000/docs](http://ec2-34-192-45-54.compute-1.amazonaws.com:8000/docs)
+- **Documentacion API lambda:** [https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws/docs](https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws/docs) o [http://localhost:8000/ui](https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws/docs)
 
 ### Opción B: AWS Lambda (Docker Container)
 
@@ -184,3 +184,9 @@ Para generar reporte de cobertura de código:
 ```bash
 pytest --cov=app --cov=api_ec2
 ```
+
+## Uso de IA
+Se usaron las siguietes herramientas de IA:
+- Kiro: para el uso de configuraciones del proyecto
+- Claude: Como ayuda para la elaboracion del pipeline y el readme
+- ChatGPT: Preguntas de configuracion de aws 
