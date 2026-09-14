@@ -7,7 +7,7 @@ Núcleo de lógica NLP compartido por ambas APIs (EC2 y Lambda).
 from __future__ import annotations
 
 import math
-import re
+import unicodedata
 from collections import Counter
 from functools import lru_cache
 
@@ -50,7 +50,10 @@ def _clean_tokens(text: str) -> list[str]:
     proceso para /clean y para /vectorize, por contrato del PDF.
     """
     nlp = get_nlp()
-    text_pre = re.sub(r'[^\w\s]', ' ', text, flags=re.UNICODE) # reemplaza lo que no sea letra, numero o espacio por un espacio (usa regex)
+    text_pre = "".join(
+        " " if unicodedata.category(ch).startswith("P") else ch
+        for ch in text
+    )
     doc = nlp(text_pre.lower())
 
     tokens = []
@@ -81,7 +84,7 @@ def pos_analysis(text: str) -> list[dict]:
     doc = nlp(text)
     return [
         #texto original, post(categoria gramatical. verb, per, etc..), lema(forma base de la palabra)
-        {"text": tok.text, "pos": tok.pos_, "lemma": tok.lemma_.lower()}
+        {"text": tok.text, "pos": tok.pos_, "lemma": tok.lemma_}
         for tok in doc
         if not tok.is_space
     ]

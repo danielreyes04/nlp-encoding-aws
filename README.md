@@ -88,8 +88,8 @@ source .venv/bin/activate   # En Linux/macOS
 # Dependencias base
 pip install -r requirements.txt
 
-# Modelo de spaCy para español (recomendado: md para mayor precisión)
-python -m spacy download es_core_news_md
+# Modelo de spaCy para español
+python -m spacy download es_core_news_sm
 
 # (Opcional) Dependencias de pruebas y desarrollo
 pip install -r requirements-dev.txt
@@ -139,13 +139,11 @@ Todos los endpoints reciben y devuelven `application/json`.
 | Método | Endpoint | Entrada | Descripción |
 | :--- | :--- | :--- | :--- |
 | `GET` | `/` | *Ninguna* | Verificación de estado de la API (*Health check*). |
-| `GET` | `/client` | *Ninguna* | Sirve la interfaz gráfica de usuario. |
-| `POST` | `/processed` | `{"text": "..."}` | Limpieza, lematización y etiquetas POS. |
-| `POST` | `/dependency` | `{"text": "..."}` | Dependencias sintácticas y árboles SVG de spaCy `displacy`. |
-| `POST` | `/ner` | `{"text": "..."}` | Reconocimiento de Entidades Nombradas (NER). |
-| `POST` | `/full` | `{"text": "..."}` | Ejecución combinada de processed + dependency + ner. |
-| `POST` | `/encoding` | `{"corpus": [...], "method": "tfidf"}` | Vectorización del corpus (`tfidf`, `bow` o `onehot`). |
-| `POST` | `/pipeline` | `{"corpus": [...], "method": "tfidf"}` | Flujo completo paso a paso sobre todo el corpus. |
+| `POST` | `/api/v1/clean` | `{"text": "..."}` | Limpieza de texto. (JSON) |
+| `POST` | `/api/v1/pos` | `{"text": "..."}` | Análisis POS. (JSON) |
+| `POST` | `/api/v1/ner` | `{"text": "..."}` | Reconocimiento de Entidades Nombradas. (JSON) |
+| `POST` | `/api/v1/visualize/dep` | `{"text": "..."}` | Visualización de dependencias sintácticas. (HTML) |
+| `POST` | `/api/v1/vectorize` | `{"documents": [...]}` | Vectorización del corpus. (JSON) |
 
 ### Ejemplos de uso con `curl`
 
@@ -185,8 +183,21 @@ Para generar reporte de cobertura de código:
 pytest --cov=app --cov=api_ec2
 ```
 
-## Uso de IA
-Se usaron las siguietes herramientas de IA:
-- Kiro: para el uso de configuraciones del proyecto
-- Claude: Como ayuda para la elaboracion del pipeline y el readme
-- ChatGPT: Preguntas de configuracion de aws 
+## Uso de inteligencia artificial generativa
+Durante el desarrollo se utilizaron herramientas de IA como apoyo.
+
+- Kiro: apoyo en configuración y estructura del proyecto.
+- Claude: apoyo en elaboración/revisión del pipeline y documentación.
+- ChatGPT: apoyo en configuración de AWS, revisión de requisitos y diseño de pruebas.
+
+Verificación:
+Toda recomendación incorporada fue revisada mediante:
+- pruebas unitarias;
+- pruebas de integración;
+- comparación directa con spaCy es_core_news_sm;
+- pruebas HTTP;
+- validación de paridad entre EC2 y Lambda;
+- pruebas de entradas inválidas;
+- pruebas batch;
+- pruebas de concurrencia;
+- mediciones de rendimiento. 
