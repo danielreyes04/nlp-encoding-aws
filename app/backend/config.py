@@ -23,7 +23,7 @@ API_VERSION: str = "1.0.0"
 # Lambda Function URL (despliegue serverless)
 LAMBDA_URL: str = os.getenv(
     "LAMBDA_URL",
-    "https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws",
+    "https://qns7ihhrmcizvloimxgmhrtgdm0kudmi.lambda-url.us-east-1.on.aws",
 )
 
 # CORS

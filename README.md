@@ -116,7 +116,7 @@ uvicorn api_ec2.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 - **Documentación API EC2:** [http://ec2-44-214-185-196.compute-1.amazonaws.com:8000/docs](http://ec2-34-192-45-54.compute-1.amazonaws.com:8000/docs)
-- **Documentacion API lambda:** [https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws/docs](https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws/docs) o [http://localhost:8000/ui](https://u6dxtnjdzdxh2kddpvzuxbidni0lfpat.lambda-url.us-east-1.on.aws/docs)
+- **Documentacion API lambda:** [https://qns7ihhrmcizvloimxgmhrtgdm0kudmi.lambda-url.us-east-1.on.aws/docs](https://qns7ihhrmcizvloimxgmhrtgdm0kudmi.lambda-url.us-east-1.on.aws/docs) o [http://localhost:8000/ui](https://qns7ihhrmcizvloimxgmhrtgdm0kudmi.lambda-url.us-east-1.on.aws/docs)
 
 ### Opción B: AWS Lambda (Docker Container)
 
