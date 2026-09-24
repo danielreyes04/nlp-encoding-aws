@@ -68,3 +68,7 @@ venv.bak/
 *~
 .DS_Store
 Thumbs.db
+aws/
+awscliv2.zip
+.venv*/
+.env
