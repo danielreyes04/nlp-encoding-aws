@@ -54,7 +54,7 @@ class TextRequest(BaseModel):
     Cuerpo de entrada para /api/v1/clean, /api/v1/pos y /api/v1/ner.
     'text' puede ser un string único o una lista de strings no vacíos.
     """
-    text: Union[str, list[str]] = Field(
+    text: Union[list[str], str] = Field(
         ...,
         description="Texto único o lista de textos a procesar.",
         examples=["Mi gato come pescado", ["Texto uno", "Texto dos"]],

@@ -78,32 +78,32 @@ def clean_texts(texts: list[str]) -> list[str]:
     return [clean_text(t) for t in texts]
 
 
-# no se limpia ni se eliminan espacios para poder extraer el contextos y que el modelo pueda determinar la categoria gramatical
-def pos_analysis(text: str) -> list[dict]:
+def pos_analysis(text: str) -> dict:
     nlp = get_nlp()
     doc = nlp(text)
-    return [
-        #texto original, post(categoria gramatical. verb, per, etc..), lema(forma base de la palabra)
-        {"text": tok.text, "pos": tok.pos_, "lemma": tok.lemma_}
-        for tok in doc
-        if not tok.is_space
-    ]
+    return {
+        "tokens": [
+            {"text": tok.text, "pos": tok.pos_, "lemma": tok.lemma_}
+            for tok in doc
+        ]
+    }
 
 #retorna un corpus con con cada documento como dict
-def pos_analysis_batch(texts: list[str]) -> list[list[dict]]:
+def pos_analysis_batch(texts: list[str]) -> list[dict]:
     return [pos_analysis(t) for t in texts]
 
-def ner_analysis(text: str) -> list[dict]:
+def ner_analysis(text: str) -> dict:
     nlp = get_nlp()
     doc = nlp(text)
-    return [
-        #texto original de la entidad, categoria de la entidad,(persona,lugar,fecha,etc..),la posicion donde empieza, posicion donde termina
-        {"text": ent.text, "label": ent.label_, "start": ent.start_char, "end": ent.end_char}
-        for ent in doc.ents
-    ]
+    return {
+        "entities": [
+            {"text": ent.text, "label": ent.label_, "start": ent.start_char, "end": ent.end_char}
+            for ent in doc.ents
+        ]
+    }
 
 #retorna un corpus con con cada documento como dict
-def ner_analysis_batch(texts: list[str]) -> list[list[dict]]:
+def ner_analysis_batch(texts: list[str]) -> list[dict]:
     return [ner_analysis(t) for t in texts]
 
 # genera una representacion grafica de  del analisisi de dependecias
